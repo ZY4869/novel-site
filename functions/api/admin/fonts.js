@@ -1,5 +1,5 @@
 // 管理API：上传/删除自定义字体
-import { checkAdmin } from '../_utils.js';
+import { checkAdmin, requireSuperAdmin } from '../_utils.js';
 
 async function getFontList(env) {
   const row = await env.DB.prepare("SELECT value FROM site_settings WHERE key = 'custom_fonts'").first();
@@ -17,6 +17,7 @@ export async function onRequestPost(context) {
   const { request, env } = context;
   const auth = await checkAdmin(request, env);
   if (!auth.ok) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!requireSuperAdmin(auth)) return Response.json({ error: '仅超级管理员可管理字体' }, { status: 403 });
 
   try {
     const formData = await request.formData();
@@ -50,6 +51,7 @@ export async function onRequestDelete(context) {
   const { request, env } = context;
   const auth = await checkAdmin(request, env);
   if (!auth.ok) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!requireSuperAdmin(auth)) return Response.json({ error: '仅超级管理员可管理字体' }, { status: 403 });
 
   try {
     const body = await request.json();

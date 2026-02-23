@@ -62,8 +62,8 @@ export async function onRequestDelete(context) {
   const body = await parseJsonBody(request);
   if (!body || !body.id) return Response.json({ error: '缺少用户ID' }, { status: 400 });
 
-  // 不能删除自己
-  if (body.id === auth.userId) return Response.json({ error: '不能删除自己' }, { status: 400 });
+  // 不能删除自己（统一类型比较，防止 "1" !== 1 绕过）
+  if (String(body.id) === String(auth.userId)) return Response.json({ error: '不能删除自己' }, { status: 400 });
 
   // 检查是否存在
   const user = await env.DB.prepare('SELECT username FROM admin_users WHERE id = ?').bind(body.id).first();
@@ -90,8 +90,8 @@ export async function onRequestPut(context) {
   const validRoles = ['super_admin', 'editor'];
   if (!validRoles.includes(body.role)) return Response.json({ error: '无效的角色' }, { status: 400 });
 
-  // 不能降级自己
-  if (body.id === auth.userId && body.role !== 'super_admin') {
+  // 不能降级自己（统一类型比较）
+  if (String(body.id) === String(auth.userId) && body.role !== 'super_admin') {
     return Response.json({ error: '不能降级自己的权限' }, { status: 400 });
   }
 

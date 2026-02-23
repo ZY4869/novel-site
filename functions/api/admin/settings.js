@@ -1,5 +1,5 @@
 // PUT /api/admin/settings — 更新站点设置
-import { checkAdmin, parseJsonBody } from '../_utils.js';
+import { checkAdmin, requireSuperAdmin, parseJsonBody } from '../_utils.js';
 
 const ALLOWED_KEYS = ['site_name', 'site_desc', 'footer_text'];
 const MAX_VALUE_LENGTH = 500;
@@ -13,6 +13,7 @@ export async function onRequestPut(context) {
     const msg = auth.reason === 'locked' ? 'Too many failed attempts, try again later' : 'Unauthorized';
     return Response.json({ error: msg }, { status });
   }
+  if (!requireSuperAdmin(auth)) return Response.json({ error: '仅超级管理员可修改设置' }, { status: 403 });
 
   const body = await parseJsonBody(request);
   if (!body || typeof body.settings !== 'object') {

@@ -63,7 +63,7 @@ async function trackVisit(env, request) {
     const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
     // IP哈希（不存原始IP）
     const encoder = new TextEncoder();
-    const data = encoder.encode(ip + '-novel-site-salt');
+    const data = encoder.encode(ip + (env.IP_SALT || 'novel-site-default-salt'));
     const hashBuf = await crypto.subtle.digest('SHA-256', data);
     const ipHash = [...new Uint8Array(hashBuf)].map(b => b.toString(16).padStart(2, '0')).join('');
 
