@@ -40,7 +40,8 @@ export async function onRequestPost(context) {
 
     return Response.json({ success: true, name });
   } catch (e) {
-    return Response.json({ error: e.message || '上传失败' }, { status: 500 });
+    console.error('Font upload error:', e);
+    return Response.json({ error: '上传失败' }, { status: 500 });
   }
 }
 
@@ -53,7 +54,9 @@ export async function onRequestDelete(context) {
   try {
     const body = await request.json();
     const { filename } = body;
-    if (!filename) return Response.json({ error: '缺少文件名' }, { status: 400 });
+    if (!filename || !/^[\w\-\.]+\.woff2$/i.test(filename)) {
+      return Response.json({ error: '无效的文件名' }, { status: 400 });
+    }
 
     // 从R2删除
     await env.R2.delete(`fonts/${filename}`);
@@ -66,6 +69,7 @@ export async function onRequestDelete(context) {
 
     return Response.json({ success: true });
   } catch (e) {
-    return Response.json({ error: e.message || '删除失败' }, { status: 500 });
+    console.error('Font delete error:', e);
+    return Response.json({ error: '删除失败' }, { status: 500 });
   }
 }

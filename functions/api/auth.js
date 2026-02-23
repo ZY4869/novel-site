@@ -17,7 +17,7 @@ export async function onRequestPost(context) {
     const { username, password } = body;
     if (!username || !password) return Response.json({ error: 'Username and password required' }, { status: 400 });
 
-    const ip = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
     const result = await login(env, username.trim(), password, ip);
 
     if (!result.ok) {
