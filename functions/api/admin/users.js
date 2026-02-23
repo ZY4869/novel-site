@@ -1,5 +1,5 @@
 // 管理员管理API（仅super_admin可用）
-import { checkAdmin, requireSuperAdmin, sha256Hash, parseJsonBody } from '../_utils.js';
+import { checkAdmin, requireSuperAdmin, validateId, hashPassword, parseJsonBody } from '../_utils.js';
 
 // GET: 获取管理员列表
 export async function onRequestGet(context) {
@@ -34,17 +34,10 @@ export async function onRequestPost(context) {
   const validRoles = ['super_admin', 'editor'];
   const userRole = validRoles.includes(role) ? role : 'editor';
 
-  // 检查用户名是否已存在
   const existing = await env.DB.prepare('SELECT id FROM admin_users WHERE username = ?').bind(username).first();
   if (existing) return Response.json({ error: '用户名已存在' }, { status: 409 });
 
-  // 哈希密码（动态导入hashPassword不可行，内联实现）
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, key, 256);
-  const hashHex = [...new Uint8Array(bits)].map(b => b.toString(16).padStart(2, '0')).join('');
-  const saltHex = [...salt].map(b => b.toString(16).padStart(2, '0')).join('');
-  const passwordHash = `pbkdf2:100000:${saltHex}:${hashHex}`;
+  const passwordHash = await hashPassword(password);
 
   await env.DB.prepare("INSERT INTO admin_users (username, password_hash, role) VALUES (?, ?, ?)")
     .bind(username, passwordHash, userRole).run();
@@ -61,17 +54,21 @@ export async function onRequestDelete(context) {
 
   const body = await parseJsonBody(request);
   if (!body || !body.id) return Response.json({ error: '缺少用户ID' }, { status: 400 });
+  if (!validateId(String(body.id))) return Response.json({ error: '无效的用户ID' }, { status: 400 });
 
-  // 不能删除自己（统一类型比较，防止 "1" !== 1 绕过）
+  // 不能删除自己
   if (String(body.id) === String(auth.userId)) return Response.json({ error: '不能删除自己' }, { status: 400 });
 
-  // 检查是否存在
-  const user = await env.DB.prepare('SELECT username FROM admin_users WHERE id = ?').bind(body.id).first();
+  const user = await env.DB.prepare('SELECT username, role FROM admin_users WHERE id = ?').bind(body.id).first();
   if (!user) return Response.json({ error: '用户不存在' }, { status: 404 });
 
-  // 删除该用户的所有session
+  // 保护最后一个super_admin
+  if (user.role === 'super_admin') {
+    const { count } = await env.DB.prepare("SELECT COUNT(*) as count FROM admin_users WHERE role = 'super_admin'").first();
+    if (count <= 1) return Response.json({ error: '不能删除最后一个超级管理员' }, { status: 400 });
+  }
+
   await env.DB.prepare('DELETE FROM admin_sessions WHERE user_id = ?').bind(body.id).run();
-  // 删除用户
   await env.DB.prepare('DELETE FROM admin_users WHERE id = ?').bind(body.id).run();
 
   return Response.json({ success: true, message: `管理员 ${user.username} 已删除` });
@@ -86,13 +83,23 @@ export async function onRequestPut(context) {
 
   const body = await parseJsonBody(request);
   if (!body || !body.id || !body.role) return Response.json({ error: '缺少参数' }, { status: 400 });
+  if (!validateId(String(body.id))) return Response.json({ error: '无效的用户ID' }, { status: 400 });
 
   const validRoles = ['super_admin', 'editor'];
   if (!validRoles.includes(body.role)) return Response.json({ error: '无效的角色' }, { status: 400 });
 
-  // 不能降级自己（统一类型比较）
+  // 不能降级自己
   if (String(body.id) === String(auth.userId) && body.role !== 'super_admin') {
     return Response.json({ error: '不能降级自己的权限' }, { status: 400 });
+  }
+
+  // 保护最后一个super_admin不被降级
+  if (body.role !== 'super_admin') {
+    const target = await env.DB.prepare('SELECT role FROM admin_users WHERE id = ?').bind(body.id).first();
+    if (target && target.role === 'super_admin') {
+      const { count } = await env.DB.prepare("SELECT COUNT(*) as count FROM admin_users WHERE role = 'super_admin'").first();
+      if (count <= 1) return Response.json({ error: '不能降级最后一个超级管理员' }, { status: 400 });
+    }
   }
 
   await env.DB.prepare("UPDATE admin_users SET role = ?, updated_at = datetime('now') WHERE id = ?")

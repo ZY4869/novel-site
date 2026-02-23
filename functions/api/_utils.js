@@ -1,6 +1,6 @@
 // ===== 密码哈希（PBKDF2 + 随机盐） =====
 
-async function hashPassword(password) {
+export async function hashPassword(password) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const key = await crypto.subtle.importKey(
     'raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']
@@ -191,7 +191,7 @@ async function isIpLocked(env, ip) {
       .bind(ip).first();
     if (!r) return false;
     return r.locked_until && new Date(r.locked_until) > new Date();
-  } catch { return false; }
+  } catch { return true; } // fail-closed: DB异常时拒绝登录
 }
 
 async function recordFailedAttempt(env, ip) {
