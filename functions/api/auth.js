@@ -31,6 +31,7 @@ export async function onRequestPost(context) {
       success: true,
       token: result.token,
       username: result.username,
+      role: result.role,
       expiresAt: result.expiresAt
     });
   }
@@ -78,7 +79,7 @@ export async function onRequestGet(context) {
   if (action === 'me') {
     const auth = await checkAdmin(request, env);
     if (!auth.ok) return Response.json({ authenticated: false }, { status: 401 });
-    return Response.json({ authenticated: true, username: auth.username });
+    return Response.json({ authenticated: true, username: auth.username, role: auth.role });
   }
 
   return Response.json({ error: 'Unknown action' }, { status: 400 });

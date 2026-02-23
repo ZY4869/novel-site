@@ -67,7 +67,7 @@ async function ensureDefaultAdmin(env) {
     const existing = await env.DB.prepare('SELECT id FROM admin_users WHERE username = ?').bind('admin').first();
     if (existing) return;
     const hash = await hashPassword(env.ADMIN_PASSWORD);
-    await env.DB.prepare('INSERT OR IGNORE INTO admin_users (username, password_hash) VALUES (?, ?)')
+    await env.DB.prepare("INSERT OR IGNORE INTO admin_users (username, password_hash, role) VALUES (?, ?, 'super_admin')")
       .bind('admin', hash).run();
   } catch {}
 }
@@ -89,7 +89,7 @@ export async function checkAdmin(request, env) {
   // 对token做哈希后查找
   const tokenHash = await sha256Hash(token);
   const session = await env.DB.prepare(
-    "SELECT s.user_id, s.expires_at, u.username FROM admin_sessions s JOIN admin_users u ON s.user_id = u.id WHERE s.token = ?"
+    "SELECT s.user_id, s.expires_at, u.username, u.role FROM admin_sessions s JOIN admin_users u ON s.user_id = u.id WHERE s.token = ?"
   ).bind(tokenHash).first();
 
   if (!session) return { ok: false, reason: 'invalid_token' };
@@ -104,7 +104,7 @@ export async function checkAdmin(request, env) {
     await env.DB.prepare("DELETE FROM auth_attempts WHERE last_attempt < datetime('now', '-1 day')").run().catch(() => {});
   }
 
-  return { ok: true, userId: session.user_id, username: session.username };
+  return { ok: true, userId: session.user_id, username: session.username, role: session.role || 'editor' };
 }
 
 // ===== 登录 =====
@@ -116,7 +116,7 @@ export async function login(env, username, password, ip) {
 
   await ensureDefaultAdmin(env);
 
-  const user = await env.DB.prepare('SELECT id, password_hash FROM admin_users WHERE username = ?')
+  const user = await env.DB.prepare('SELECT id, password_hash, role FROM admin_users WHERE username = ?')
     .bind(username).first();
 
   if (!user) {
@@ -154,7 +154,7 @@ export async function login(env, username, password, ip) {
   await env.DB.prepare("DELETE FROM admin_sessions WHERE expires_at < datetime('now')").run().catch(() => {});
   await env.DB.prepare("DELETE FROM auth_attempts WHERE last_attempt < datetime('now', '-1 day')").run().catch(() => {});
 
-  return { ok: true, token, username: user.username, expiresAt };
+  return { ok: true, token, username: user.username, role: user.role || 'editor', expiresAt };
 }
 
 // ===== 修改密码 =====
@@ -226,6 +226,10 @@ async function clearFailedAttempts(env, ip) {
 
 // ===== 工具函数 =====
 export function validateId(id) { return /^\d+$/.test(id); }
+
+export function requireSuperAdmin(auth) {
+  return auth.role === 'super_admin';
+}
 
 export async function parseJsonBody(request) {
   try { return await request.json(); } catch { return null; }

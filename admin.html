@@ -98,7 +98,7 @@
       </div>
 
       <!-- 站点设置 -->
-      <div class="admin-section">
+      <div class="admin-section super-admin-only" style="display:none">
         <h3>⚙️ 站点设置</h3>
         <div class="form-group">
           <label>站点名称</label>
@@ -210,7 +210,7 @@
       </div>
 
       <!-- 自定义字体管理 -->
-      <div class="admin-section">
+      <div class="admin-section super-admin-only" style="display:none">
         <h3>🔤 自定义字体</h3>
         <div class="form-group">
           <label>上传 .woff2 字体文件（最大10MB）</label>
@@ -224,7 +224,7 @@
       </div>
 
       <!-- 数据备份与恢复 -->
-      <div class="admin-section">
+      <div class="admin-section super-admin-only" style="display:none">
         <h3>💾 数据备份与恢复</h3>
         <p style="font-size:13px;color:var(--text-light);margin-bottom:12px">导出全站数据（书籍+章节正文+设置）为 JSON 文件，或从备份文件恢复。</p>
         <button class="btn" id="backup-btn" onclick="exportBackup()">导出备份</button>
@@ -239,6 +239,32 @@
           <div id="backup-status" style="font-size:13px;color:var(--text-light);margin-top:4px"></div>
         </div>
         <div id="backup-msg"></div>
+      </div>
+
+      <!-- 管理员管理（仅超管可见） -->
+      <div class="admin-section super-admin-only" style="display:none">
+        <h3>👥 管理员管理</h3>
+        <div id="admin-users-list" style="margin-bottom:12px"></div>
+        <details style="margin-top:8px">
+          <summary style="cursor:pointer;font-size:14px;color:var(--accent)">+ 添加管理员</summary>
+          <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-top:8px;align-items:end">
+            <div>
+              <label style="font-size:12px;color:var(--text-light)">用户名</label>
+              <input type="text" id="new-admin-user" placeholder="字母数字下划线" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text)">
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text-light)">密码</label>
+              <input type="password" id="new-admin-pass" placeholder="至少8位" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text)">
+            </div>
+            <button class="btn" onclick="createAdmin()">创建</button>
+          </div>
+          <div style="margin-top:4px">
+            <label style="font-size:12px;color:var(--text-light)">
+              <input type="checkbox" id="new-admin-super"> 超级管理员权限
+            </label>
+          </div>
+          <div id="admin-user-msg"></div>
+        </details>
       </div>
 
     </div><!-- /admin-panel -->
@@ -267,6 +293,7 @@
 
     // ===== 认证 =====
     let authToken = sessionStorage.getItem('auth_token') || '';
+    let currentRole = sessionStorage.getItem('auth_role') || '';
 
     function getToken() { return authToken; }
 
@@ -282,8 +309,10 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
         authToken = data.token;
+        currentRole = data.role || 'editor';
         sessionStorage.setItem('auth_token', authToken);
-        showAdminPanel(data.username);
+        sessionStorage.setItem('auth_role', currentRole);
+        showAdminPanel(data.username, currentRole);
       } catch(e) { showMsg('login-msg', e.message, 'error'); }
     }
 
@@ -293,27 +322,33 @@
         const res = await fetch('/api/auth?action=me', {
           headers:{'Authorization':'Bearer '+authToken}
         });
-        if (!res.ok) { authToken=''; sessionStorage.removeItem('auth_token'); return false; }
+        if (!res.ok) { authToken=''; currentRole=''; sessionStorage.removeItem('auth_token'); sessionStorage.removeItem('auth_role'); return false; }
         const data = await res.json();
-        if (data.authenticated) { showAdminPanel(data.username); return true; }
+        if (data.authenticated) { currentRole = data.role || 'editor'; sessionStorage.setItem('auth_role', currentRole); showAdminPanel(data.username, currentRole); return true; }
       } catch {}
-      authToken=''; sessionStorage.removeItem('auth_token');
+      authToken=''; currentRole=''; sessionStorage.removeItem('auth_token'); sessionStorage.removeItem('auth_role');
       return false;
     }
 
-    function showAdminPanel(username) {
+    function showAdminPanel(username, role) {
       document.getElementById('login-panel').style.display = 'none';
       document.getElementById('admin-panel').style.display = 'block';
       document.getElementById('current-user').textContent = username;
-      document.getElementById('user-info').textContent = username;
+      document.getElementById('user-info').textContent = username + (role === 'super_admin' ? ' (超管)' : ' (编辑)');
       document.getElementById('user-info').style.display = 'inline';
+      // super_admin专属功能
+      const saEls = document.querySelectorAll('.super-admin-only');
+      saEls.forEach(el => el.style.display = role === 'super_admin' ? '' : 'none');
       loadBookList(); loadBookSelects(); loadSettings(); loadStats(); loadFontList();
+      if (role === 'super_admin') loadAdminUsers();
     }
 
     async function doLogout() {
       try { await fetch('/api/auth?action=logout',{method:'POST',headers:{'Authorization':'Bearer '+authToken}}); } catch{}
       authToken = '';
+      currentRole = '';
       sessionStorage.removeItem('auth_token');
+      sessionStorage.removeItem('auth_role');
       document.getElementById('login-panel').style.display = 'block';
       document.getElementById('admin-panel').style.display = 'none';
       document.getElementById('user-info').style.display = 'none';
@@ -810,6 +845,56 @@
           el.innerHTML = '';
         }
       } catch {}
+    }
+
+    // ===== 管理员管理 =====
+    async function loadAdminUsers() {
+      try {
+        const res = await api('GET', '/api/admin/users');
+        const data = await res.json();
+        const admins = data.admins || [];
+        const el = document.getElementById('admin-users-list');
+        if (admins.length === 0) { el.innerHTML = '<p style="color:var(--text-light);font-size:13px">暂无管理员</p>'; return; }
+        el.innerHTML = '<table style="width:100%;font-size:14px;border-collapse:collapse"><thead><tr style="border-bottom:2px solid var(--border)"><th style="text-align:left;padding:6px">用户名</th><th style="text-align:left;padding:6px">角色</th><th style="text-align:left;padding:6px">创建时间</th><th style="text-align:right;padding:6px">操作</th></tr></thead><tbody>' +
+          admins.map(a => `<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px">${esc(a.username)}</td><td style="padding:6px"><select onchange="changeRole(${a.id},this.value)" style="padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:13px"><option value="super_admin"${a.role==='super_admin'?' selected':''}>超级管理员</option><option value="editor"${a.role==='editor'?' selected':''}>编辑</option></select></td><td style="padding:6px;color:var(--text-light);font-size:12px">${a.created_at ? a.created_at.slice(0,10) : '-'}</td><td style="padding:6px;text-align:right"><button class="btn btn-sm btn-danger" onclick="deleteAdmin(${a.id},'${esc(a.username).replace(/'/g,"\\'")}')">删除</button></td></tr>`).join('') +
+          '</tbody></table>';
+      } catch {}
+    }
+
+    async function createAdmin() {
+      const username = document.getElementById('new-admin-user').value.trim();
+      const password = document.getElementById('new-admin-pass').value;
+      const isSuper = document.getElementById('new-admin-super').checked;
+      if (!username || !password) return showMsg('admin-user-msg', '请填写用户名和密码', 'error');
+      try {
+        const res = await api('POST', '/api/admin/users', { username, password, role: isSuper ? 'super_admin' : 'editor' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        showMsg('admin-user-msg', data.message, 'success');
+        document.getElementById('new-admin-user').value = '';
+        document.getElementById('new-admin-pass').value = '';
+        document.getElementById('new-admin-super').checked = false;
+        loadAdminUsers();
+      } catch(e) { showMsg('admin-user-msg', e.message, 'error'); }
+    }
+
+    async function deleteAdmin(id, username) {
+      if (!confirm(`确定删除管理员 ${username}？`)) return;
+      try {
+        const res = await api('DELETE', '/api/admin/users', { id });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        loadAdminUsers();
+      } catch(e) { alert(e.message); }
+    }
+
+    async function changeRole(id, role) {
+      try {
+        const res = await api('PUT', '/api/admin/users', { id, role });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        loadAdminUsers();
+      } catch(e) { alert(e.message); loadAdminUsers(); }
     }
 
     // ===== 批量操作 =====
