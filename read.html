@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>阅读</title>
+  <meta name="description" content="">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="progress-bar" id="progress-bar"></div>
+  <div class="navbar">
+    <h1><a href="/">📚 我的书架</a></h1>
+    <nav>
+      <a href="#" id="back-link">返回目录</a>
+      <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">🌙</button>
+    </nav>
+  </div>
+  <div class="reader">
+    <div class="breadcrumb" id="breadcrumb"></div>
+    <div class="reader-toolbar">
+      <span style="font-size:13px;color:var(--text-light)">字号</span>
+      <button class="font-btn" onclick="changeFontSize(-1)">A-</button>
+      <span id="font-label" style="font-size:13px;min-width:40px;text-align:center">17px</span>
+      <button class="font-btn" onclick="changeFontSize(1)">A+</button>
+    </div>
+    <div id="content" class="loading">加载中...</div>
+  </div>
+  <button class="back-to-top" id="back-top" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
+
+  <script>
+    // 主题初始化
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    updateThemeBtn();
+
+    // 字号初始化
+    let fontSize = parseInt(localStorage.getItem('font-size')) || 17;
+    applyFontSize();
+
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('theme', next);
+      updateThemeBtn();
+    }
+    function updateThemeBtn() {
+      const btn = document.querySelector('.theme-toggle');
+      btn.textContent = document.documentElement.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙';
+    }
+    function changeFontSize(delta) {
+      fontSize = Math.max(14, Math.min(24, fontSize + delta));
+      localStorage.setItem('font-size', fontSize);
+      applyFontSize();
+    }
+    function applyFontSize() {
+      document.documentElement.style.setProperty('--font-size', fontSize + 'px');
+      const label = document.getElementById('font-label');
+      if (label) label.textContent = fontSize + 'px';
+    }
+
+    // 进度条
+    window.addEventListener('scroll', () => {
+      const h = document.documentElement.scrollHeight - window.innerHeight;
+      const pct = h > 0 ? (window.scrollY / h * 100) : 0;
+      document.getElementById('progress-bar').style.width = pct + '%';
+      // 返回顶部按钮
+      document.getElementById('back-top').classList.toggle('visible', window.scrollY > 400);
+    });
+
+    // 键盘快捷键
+    document.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key === 'ArrowLeft' && prevUrl) location.href = prevUrl;
+      if (e.key === 'ArrowRight' && nextUrl) location.href = nextUrl;
+      if (e.key === 'Escape' && backUrl) location.href = backUrl;
+    });
+
+    let prevUrl = null, nextUrl = null, backUrl = null;
+
+    // 加载站点设置
+    fetch('/api/settings').then(r => r.json()).then(d => {
+      const s = d.settings || {};
+      if (s.site_name) document.querySelector('.navbar h1 a').textContent = '📚 ' + s.site_name;
+    }).catch(() => {});
+
+    const chapterId = new URLSearchParams(location.search).get('id');
+    if (!chapterId || !/^\d+$/.test(chapterId)) {
+      document.getElementById('content').innerHTML = '<div class="msg msg-error">无效的章节ID</div>';
+    } else {
+      loadChapter();
+    }
+
+    async function loadChapter() {
+      const el = document.getElementById('content');
+      try {
+        const res = await fetch(`/api/chapters/${chapterId}`);
+        if (!res.ok) throw new Error(res.status === 404 ? '章节不存在' : '加载失败');
+        const data = await res.json();
+        const c = data.chapter;
+
+        // SEO
+        document.title = esc(c.title) + ' - ' + esc(c.book_title);
+        const metaDesc = document.querySelector('meta[name="description"]');
+        if (metaDesc) metaDesc.content = `${c.book_title} - ${c.title}`;
+
+        // 面包屑
+        backUrl = `/book.html?id=${c.book_id}`;
+        document.getElementById('back-link').href = backUrl;
+        document.getElementById('breadcrumb').innerHTML =
+          `<a href="/">书架</a><span>›</span><a href="/book.html?id=${c.book_id}">${esc(c.book_title)}</a><span>›</span>${esc(c.title)}`;
+
+        // 正文（textContent防XSS）
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'reader-content';
+        contentDiv.textContent = data.content;
+
+        // 导航
+        prevUrl = data.prevChapter ? `/read.html?id=${data.prevChapter.id}` : null;
+        nextUrl = data.nextChapter ? `/read.html?id=${data.nextChapter.id}` : null;
+
+        const nav = document.createElement('div');
+        nav.className = 'reader-nav';
+        nav.innerHTML = `
+          ${prevUrl ? `<a href="${prevUrl}">← ${esc(data.prevChapter.title)}</a>` : '<span class="disabled">已是第一章</span>'}
+          <a href="/book.html?id=${c.book_id}">目录</a>
+          <a href="#" onclick="exportThis();return false" style="font-size:13px">导出TXT</a>
+          ${nextUrl ? `<a href="${nextUrl}">${esc(data.nextChapter.title)} →</a>` : '<span class="disabled">已是最新章</span>'}
+        `;
+
+        // 存储当前章节数据用于导出
+        window._chapterData = { content: data.content, title: c.title };
+
+        el.innerHTML = `<h2>${esc(c.title)}</h2>`;
+        el.appendChild(contentDiv);
+        el.appendChild(nav);
+
+        // 保存阅读进度
+        localStorage.setItem(`reading_${c.book_id}`, JSON.stringify({
+          chapterId: c.id, title: c.title, time: Date.now()
+        }));
+      } catch (e) {
+        el.innerHTML = `<div class="msg msg-error">${esc(e.message)}</div>`;
+      }
+    }
+
+    function esc(s) {
+      const d = document.createElement('div');
+      d.textContent = s || '';
+      return d.innerHTML;
+    }
+
+    function exportThis() {
+      if (!window._chapterData) return;
+      const BOM = '\uFEFF';
+      const blob = new Blob([BOM + window._chapterData.content], {type:'text/plain;charset=utf-8'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = (window._chapterData.title + '.txt').replace(/[<>:"/\\|?*]/g, '_');
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>

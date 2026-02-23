@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>我的书架</title>
+  <meta name="description" content="我的私人小说站，零成本搭建在 Cloudflare 上">
+  <meta property="og:title" content="我的书架">
+  <meta property="og:description" content="私人小说站，零成本搭建在 Cloudflare 上">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="navbar">
+    <h1><a href="/">📚 我的书架</a></h1>
+    <nav>
+      <a href="/admin.html">管理</a>
+      <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">🌙</button>
+    </nav>
+  </div>
+  <div class="container">
+    <div id="content" class="loading">加载中...</div>
+  </div>
+  <script>
+    // 主题
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    updateThemeBtn();
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('theme', next);
+      updateThemeBtn();
+    }
+    function updateThemeBtn() {
+      const btn = document.querySelector('.theme-toggle');
+      btn.textContent = document.documentElement.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙';
+    }
+
+    async function loadBooks() {
+      const el = document.getElementById('content');
+      try {
+        const res = await fetch('/api/books');
+        if (!res.ok) throw new Error('加载失败');
+        const data = await res.json();
+        if (!data.books || data.books.length === 0) {
+          el.innerHTML = '<div class="empty"><p>📖 书架空空如也</p><p>去<a href="/admin.html">管理后台</a>添加第一本书吧</p></div>';
+          return;
+        }
+        el.className = 'book-grid';
+        el.innerHTML = data.books.map(b => `
+          <a class="book-card" href="/book.html?id=${b.id}">
+            <h3>${esc(b.title)}</h3>
+            <div class="meta">
+              ${b.author ? esc(b.author) + ' · ' : ''}${b.chapter_count} 章 · ${formatWords(b.total_words)}
+            </div>
+            ${b.description ? `<div class="desc">${esc(b.description)}</div>` : ''}
+          </a>
+        `).join('');
+      } catch (e) {
+        el.innerHTML = `<div class="msg msg-error">加载失败：${esc(e.message)}</div>`;
+      }
+    }
+    function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+    function formatWords(n) {
+      if (n >= 10000) return (n / 10000).toFixed(1) + ' 万字';
+      return n + ' 字';
+    }
+    loadBooks();
+
+    // 加载站点设置
+    fetch('/api/settings').then(r => r.json()).then(d => {
+      const s = d.settings || {};
+      if (s.site_name) {
+        document.title = s.site_name;
+        document.querySelector('.navbar h1 a').textContent = '📚 ' + s.site_name;
+        document.querySelector('meta[property="og:title"]').content = s.site_name;
+      }
+      if (s.site_desc) {
+        document.querySelector('meta[name="description"]').content = s.site_desc;
+        document.querySelector('meta[property="og:description"]').content = s.site_desc;
+      }
+    }).catch(() => {});
+  </script>
+</body>
+</html>

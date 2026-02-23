@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>作品详情</title>
+  <meta name="description" content="">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="navbar">
+    <h1><a href="/">📚 我的书架</a></h1>
+    <nav>
+      <a href="/admin.html">管理</a>
+      <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">🌙</button>
+    </nav>
+  </div>
+  <div class="container">
+    <div class="breadcrumb"><a href="/">书架</a><span>›</span><span id="bc-title">加载中...</span></div>
+    <div id="content" class="loading">加载中...</div>
+  </div>
+  <script>
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    updateThemeBtn();
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme');
+      const next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('theme', next);
+      updateThemeBtn();
+    }
+    function updateThemeBtn() {
+      const btn = document.querySelector('.theme-toggle');
+      btn.textContent = document.documentElement.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙';
+    }
+
+    const bookId = new URLSearchParams(location.search).get('id');
+    if (!bookId || !/^\d+$/.test(bookId)) {
+      document.getElementById('content').innerHTML = '<div class="msg msg-error">无效的书籍ID</div>';
+    } else {
+      loadBook();
+    }
+
+    // 加载站点设置
+    fetch('/api/settings').then(r => r.json()).then(d => {
+      const s = d.settings || {};
+      if (s.site_name) document.querySelector('.navbar h1 a').textContent = '📚 ' + s.site_name;
+    }).catch(() => {});
+
+    async function loadBook() {
+      const el = document.getElementById('content');
+      try {
+        const res = await fetch(`/api/books/${bookId}`);
+        if (!res.ok) throw new Error(res.status === 404 ? '书籍不存在' : '加载失败');
+        const data = await res.json();
+        const b = data.book;
+        const chapters = data.chapters || [];
+
+        document.title = esc(b.title) + ' - 我的书架';
+        document.querySelector('meta[name="description"]').content = b.description || b.title;
+        document.getElementById('bc-title').textContent = b.title;
+
+        let html = `
+          <div class="book-header">
+            <h2>${esc(b.title)}</h2>
+            ${b.author ? `<div class="author">作者：${esc(b.author)}</div>` : ''}
+            ${b.description ? `<div class="desc">${esc(b.description)}</div>` : ''}
+          </div>
+        `;
+        if (chapters.length === 0) {
+          html += '<div class="empty"><p>暂无章节</p></div>';
+        } else {
+          html += '<ul class="chapter-list">' + chapters.map(c => `
+            <li>
+              <a href="/read.html?id=${c.id}">
+                <span class="chapter-title">${esc(c.title)}</span>
+                <span class="chapter-meta">${c.word_count} 字</span>
+              </a>
+            </li>
+          `).join('') + '</ul>';
+          html += `<div style="margin-top:20px;text-align:center"><a href="#" id="export-link" style="font-size:13px;color:var(--text-light);text-decoration:none;border-bottom:1px dashed var(--text-light);padding-bottom:1px">导出全书 TXT</a></div>`;
+        }
+        el.innerHTML = html;
+
+        // 安全绑定导出事件（避免onclick中拼接字符串）
+        const exportLink = document.getElementById('export-link');
+        if (exportLink) {
+          exportLink.addEventListener('click', (e) => { e.preventDefault(); exportBook(b.id, b.title, b.author); });
+        }
+      } catch (e) {
+        el.innerHTML = `<div class="msg msg-error">${esc(e.message)}</div>`;
+      }
+    }
+    function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+    async function exportBook(bookId, title, author) {
+      try {
+        const res = await fetch(`/api/books/${bookId}`);
+        const data = await res.json();
+        const chapters = data.chapters || [];
+        if (chapters.length === 0) return alert('没有章节可导出');
+        const parts = [];
+        for (const ch of chapters) {
+          const r = await fetch(`/api/chapters/${ch.id}`);
+          const d = await r.json();
+          parts.push(ch.title + '\n\n' + d.content);
+        }
+        const sep = '\n\n' + '='.repeat(40) + '\n\n';
+        const header = `《${title}》\n${author ? '作者：'+author+'\n' : ''}\n`;
+        const BOM = '\uFEFF';
+        const blob = new Blob([BOM + header + parts.join(sep)], {type:'text/plain;charset=utf-8'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = (title + (author ? '_'+author : '') + '.txt').replace(/[<>:"/\\|?*]/g,'_');
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (e) { alert('导出失败：'+e.message); }
+    }
+  </script>
+</body>
+</html>
