@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS admin_users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   username TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
+  role TEXT DEFAULT 'editor',
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
@@ -61,3 +62,38 @@ CREATE TABLE IF NOT EXISTS auth_attempts (
   locked_until TEXT,
   last_attempt TEXT DEFAULT (datetime('now'))
 );
+
+-- ========== 访问统计 ==========
+
+-- 站点日访问统计
+CREATE TABLE IF NOT EXISTS site_visits (
+  date TEXT PRIMARY KEY,
+  pv INTEGER DEFAULT 0,
+  uv INTEGER DEFAULT 0
+);
+
+-- UV去重辅助表
+CREATE TABLE IF NOT EXISTS daily_visitors (
+  date TEXT NOT NULL,
+  ip_hash TEXT NOT NULL,
+  PRIMARY KEY (date, ip_hash)
+);
+
+-- 书籍日阅读统计
+CREATE TABLE IF NOT EXISTS book_stats (
+  book_id INTEGER NOT NULL,
+  date TEXT NOT NULL,
+  views INTEGER DEFAULT 0,
+  PRIMARY KEY (book_id, date),
+  FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+);
+
+-- 章节累计阅读量
+CREATE TABLE IF NOT EXISTS chapter_stats (
+  chapter_id INTEGER PRIMARY KEY,
+  views INTEGER DEFAULT 0,
+  FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_book_stats_book_date ON book_stats(book_id, date);
+CREATE INDEX IF NOT EXISTS idx_daily_visitors_date ON daily_visitors(date);

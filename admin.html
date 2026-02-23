@@ -195,6 +195,20 @@
         <div id="manage-msg"></div>
       </div>
 
+      <!-- 自定义字体管理 -->
+      <div class="admin-section">
+        <h3>🔤 自定义字体</h3>
+        <div class="form-group">
+          <label>上传 .woff2 字体文件（最大10MB）</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="file" id="font-file" accept=".woff2" style="padding:8px 0;flex:1">
+            <button class="btn" onclick="uploadFont()">上传</button>
+          </div>
+        </div>
+        <ul class="admin-list" id="font-list"><li style="color:var(--text-light)">加载中...</li></ul>
+        <div id="font-msg"></div>
+      </div>
+
       <!-- 数据备份与恢复 -->
       <div class="admin-section">
         <h3>💾 数据备份与恢复</h3>
@@ -279,7 +293,7 @@
       document.getElementById('current-user').textContent = username;
       document.getElementById('user-info').textContent = username;
       document.getElementById('user-info').style.display = 'inline';
-      loadBookList(); loadBookSelects(); loadSettings(); loadStats();
+      loadBookList(); loadBookSelects(); loadSettings(); loadStats(); loadFontList();
     }
 
     async function doLogout() {
@@ -839,6 +853,63 @@
       } catch(e) { showMsg('backup-msg','备份失败：'+e.message,'error'); }
       btn.disabled=false; btn.textContent='导出备份';
       setTimeout(()=>{progress.style.display='none';},2000);
+    }
+
+    // ===== 自定义字体管理 =====
+    async function loadFontList() {
+      const el = document.getElementById('font-list');
+      try {
+        const res = await fetch('/api/fonts');
+        const data = await res.json();
+        const fonts = data.fonts || [];
+        if (fonts.length === 0) {
+          el.innerHTML = '<li style="color:var(--text-light)">暂无自定义字体</li>';
+          return;
+        }
+        el.innerHTML = fonts.map(f => `
+          <li>
+            <span style="font-size:14px">${esc(f)}</span>
+            <button class="btn btn-sm btn-danger" onclick="deleteFont('${esc(f)}')">删除</button>
+          </li>
+        `).join('');
+      } catch {
+        el.innerHTML = '<li style="color:var(--text-light)">加载失败</li>';
+      }
+    }
+    async function uploadFont() {
+      const fileInput = document.getElementById('font-file');
+      const file = fileInput.files[0];
+      if (!file) return showMsg('font-msg', '请选择字体文件', 'error');
+      if (!/\.woff2$/i.test(file.name)) return showMsg('font-msg', '只支持 .woff2 格式', 'error');
+      if (file.size > 10 * 1024 * 1024) return showMsg('font-msg', '文件不能超过10MB', 'error');
+      showMsg('font-msg', '上传中...', '');
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch('/api/admin/fonts', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${getToken()}` },
+          body: formData
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        showMsg('font-msg', '上传成功', 'success');
+        fileInput.value = '';
+        loadFontList();
+      } catch (e) {
+        showMsg('font-msg', e.message, 'error');
+      }
+    }
+    async function deleteFont(filename) {
+      if (!confirm(`确定删除字体「${filename}」？`)) return;
+      try {
+        const res = await api('DELETE', '/api/admin/fonts', { filename });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        loadFontList();
+      } catch (e) {
+        alert('删除失败：' + e.message);
+      }
     }
 
     document.getElementById('restore-file').addEventListener('change',async(e)=>{

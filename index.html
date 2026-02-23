@@ -20,6 +20,7 @@
   </div>
   <div class="container">
     <div id="continue-reading"></div>
+    <div id="reading-stats"></div>
     <div class="search-bar">
       <input type="text" id="search-input" placeholder="搜索书名或作者..." autocomplete="off">
       <button onclick="doSearch()">搜索</button>
@@ -74,6 +75,22 @@
           <div class="continue-arrow">→</div>
         </a>
       `;
+    }
+    function renderReadingStats() {
+      const container = document.getElementById('reading-stats');
+      try {
+        const stats = JSON.parse(localStorage.getItem('readingStats'));
+        if (!stats || (stats.totalSeconds === 0 && stats.totalChars === 0)) {
+          container.innerHTML = '';
+          return;
+        }
+        const hours = (stats.totalSeconds / 3600).toFixed(1);
+        const wanChars = (stats.totalChars / 10000).toFixed(1);
+        const days = (stats.days || []).length;
+        container.innerHTML = `<div style="text-align:center;padding:8px 0;font-size:13px;color:var(--text-light)">已读 ${hours} 小时 · ${wanChars} 万字 · 累计 ${days} 天</div>`;
+      } catch {
+        container.innerHTML = '';
+      }
     }
     function formatTimeAgo(ts) {
       const diff = Date.now() - ts;
@@ -137,6 +154,8 @@
         const data = await res.json();
         allBooks = data.books || [];
         renderContinueReading();
+        // 渲染阅读统计
+        renderReadingStats();
         if (allBooks.length === 0) {
           el.innerHTML = '<div class="empty"><p>📖 书架空空如也</p><p>去<a href="/admin.html">管理后台</a>添加第一本书吧</p></div>';
           return;

@@ -259,9 +259,23 @@
       if (e.key === 'ArrowLeft' && prevUrl) location.href = prevUrl;
       if (e.key === 'ArrowRight' && nextUrl) location.href = nextUrl;
       if (e.key === 'Escape') {
+        if (document.fullscreenElement) { document.exitFullscreen(); return; }
         if (settingsOverlay.classList.contains('active')) settingsOverlay.classList.remove('active');
         else if (tocOverlay.classList.contains('active')) tocOverlay.classList.remove('active');
         else if (backUrl) location.href = backUrl;
+      }
+      if (e.key === 't' || e.key === 'T') {
+        const idx = THEMES.indexOf(settings.theme);
+        settings.theme = THEMES[(idx + 1) % THEMES.length];
+        saveSetting('theme', settings.theme);
+        applyAllSettings(); updateSettingsUI();
+      }
+      if (e.key === 'f' || e.key === 'F') {
+        if (document.fullscreenElement) document.exitFullscreen();
+        else document.documentElement.requestFullscreen().catch(() => {});
+      }
+      if (e.key === 's' || e.key === 'S') {
+        settingsOverlay.classList.toggle('active');
       }
     });
 
@@ -269,6 +283,27 @@
     fetch('/api/settings').then(r => r.json()).then(d => {
       const s = d.settings || {};
       if (s.site_name) document.querySelector('.navbar h1 a').textContent = '📚 ' + s.site_name;
+    }).catch(() => {});
+
+    // ===== 加载自定义字体 =====
+    fetch('/api/fonts').then(r => r.json()).then(d => {
+      const fonts = d.fonts || [];
+      const container = document.getElementById('font-options');
+      fonts.forEach(name => {
+        const familyName = 'Custom-' + name.replace(/\.woff2$/i, '');
+        const face = new FontFace(familyName, `url(/api/fonts/${encodeURIComponent(name)})`);
+        face.load().then(loaded => {
+          document.fonts.add(loaded);
+          const div = document.createElement('div');
+          div.className = 'font-option';
+          div.dataset.font = `'${familyName}'`;
+          div.style.fontFamily = familyName;
+          div.textContent = name.replace(/\.woff2$/i, '');
+          container.appendChild(div);
+          // 如果当前选中的就是这个字体，标记active
+          if (settings.fontFamily === `'${familyName}'`) div.classList.add('active');
+        }).catch(() => {}); // 加载失败静默忽略
+      });
     }).catch(() => {});
 
     // ===== 预加载缓存 =====
@@ -348,6 +383,9 @@
 
         // 保存阅读进度
         saveScrollPosition();
+
+        // 阅读统计：记录章节字数和阅读天数
+        trackReadingStats(c.id, data.content.length);
 
         // 更新书签图标
         updateBookmarkIcon();
@@ -451,6 +489,38 @@
       updateBookmarkIcon();
     }
     document.getElementById('bar-bookmark').addEventListener('click', toggleBookmark);
+
+    // ===== 阅读统计 =====
+    function getReadingStats() {
+      try { return JSON.parse(localStorage.getItem('readingStats')) || {}; } catch { return {}; }
+    }
+    function saveReadingStats(s) {
+      localStorage.setItem('readingStats', JSON.stringify(s));
+    }
+    function trackReadingStats(chId, charCount) {
+      const s = getReadingStats();
+      if (!s.totalSeconds) s.totalSeconds = 0;
+      if (!s.totalChars) s.totalChars = 0;
+      if (!Array.isArray(s.readChapterIds)) s.readChapterIds = [];
+      if (!Array.isArray(s.days)) s.days = [];
+      // 记录今天
+      const today = new Date().toISOString().slice(0, 10);
+      if (!s.days.includes(today)) s.days.push(today);
+      // 首次阅读该章节才累加字数
+      if (!s.readChapterIds.includes(chId)) {
+        s.readChapterIds.push(chId);
+        s.totalChars += charCount;
+      }
+      s.lastActiveDate = today;
+      saveReadingStats(s);
+    }
+    // 每30秒累加阅读时长
+    setInterval(() => {
+      if (document.hidden) return;
+      const s = getReadingStats();
+      s.totalSeconds = (s.totalSeconds || 0) + 30;
+      saveReadingStats(s);
+    }, 30000);
   </script>
 </body>
 </html>
