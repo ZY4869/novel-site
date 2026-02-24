@@ -51,6 +51,9 @@ export async function onRequestPost(context) {
       const status = auth.reason === 'locked' ? 429 : 401;
       return Response.json({ error: 'Unauthorized' }, { status });
     }
+    if (auth.passwordLocked) {
+      return Response.json({ error: '该账号已被锁定，不允许修改密码' }, { status: 403 });
+    }
     const body = await parseJsonBody(request);
     if (!body) return Response.json({ error: 'Invalid JSON' }, { status: 400 });
     const { oldPassword, newPassword } = body;
@@ -79,7 +82,7 @@ export async function onRequestGet(context) {
   if (action === 'me') {
     const auth = await checkAdmin(request, env);
     if (!auth.ok) return Response.json({ authenticated: false }, { status: 401 });
-    return Response.json({ authenticated: true, username: auth.username, role: auth.role });
+    return Response.json({ authenticated: true, username: auth.username, role: auth.role, passwordLocked: auth.passwordLocked });
   }
 
   return Response.json({ error: 'Unknown action' }, { status: 400 });

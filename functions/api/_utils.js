@@ -56,6 +56,20 @@ export async function sha256Hash(text) {
   return [...new Uint8Array(hash)].map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// ===== Schema迁移（兼容旧数据库） =====
+
+let _schemaEnsured = false;
+
+async function ensureSchema(env) {
+  if (_schemaEnsured) return;
+  _schemaEnsured = true;
+  try {
+    await env.DB.prepare('ALTER TABLE admin_users ADD COLUMN password_locked INTEGER DEFAULT 0').run();
+  } catch {
+    // 列已存在，静默忽略
+  }
+}
+
 // ===== 默认管理员（拒绝无密码创建） =====
 
 async function ensureDefaultAdmin(env) {
@@ -75,6 +89,8 @@ async function ensureDefaultAdmin(env) {
 // ===== Session验证 =====
 
 export async function checkAdmin(request, env) {
+  await ensureSchema(env);
+
   const auth = request.headers.get('Authorization');
   if (!auth || !auth.startsWith('Bearer ')) return { ok: false, reason: 'missing' };
 
@@ -89,7 +105,7 @@ export async function checkAdmin(request, env) {
   // 对token做哈希后查找
   const tokenHash = await sha256Hash(token);
   const session = await env.DB.prepare(
-    "SELECT s.user_id, s.expires_at, u.username, u.role FROM admin_sessions s JOIN admin_users u ON s.user_id = u.id WHERE s.token = ?"
+    "SELECT s.user_id, s.expires_at, u.username, u.role, u.password_locked FROM admin_sessions s JOIN admin_users u ON s.user_id = u.id WHERE s.token = ?"
   ).bind(tokenHash).first();
 
   if (!session) return { ok: false, reason: 'invalid_token' };
@@ -104,7 +120,7 @@ export async function checkAdmin(request, env) {
     await env.DB.prepare("DELETE FROM auth_attempts WHERE last_attempt < datetime('now', '-1 day')").run().catch(() => {});
   }
 
-  return { ok: true, userId: session.user_id, username: session.username, role: session.role || 'editor' };
+  return { ok: true, userId: session.user_id, username: session.username, role: session.role || 'editor', passwordLocked: session.password_locked === 1 };
 }
 
 // ===== 登录 =====
