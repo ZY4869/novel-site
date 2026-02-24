@@ -1,0 +1,60 @@
+/* 管理后台（从 /style.css 拆分） */
+.admin-section {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow);
+  transition: background 0.3s;
+}
+.admin-section h3 {
+  font-size: 16px;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.form-group { margin-bottom: 16px; }
+.form-group label {
+  display: block;
+  font-size: 14px;
+  color: var(--text-light);
+  margin-bottom: 4px;
+}
+.form-group input,
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-family: inherit;
+  background: var(--bg);
+  color: var(--text);
+  transition: background 0.3s, color 0.3s;
+}
+.form-group textarea { min-height: 200px; resize: vertical; }
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* 管理列表 */
+.admin-list { list-style: none; }
+.admin-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.admin-list li:last-child { border-bottom: none; }
+.admin-list .item-info { flex: 1; }
+.admin-list .item-title { font-size: 15px; color: var(--text); }
+.admin-list .item-meta { font-size: 12px; color: var(--text-light); margin-top: 2px; }
+.admin-list .item-actions { display: flex; gap: 6px; }
+

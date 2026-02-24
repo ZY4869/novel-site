@@ -1,0 +1,36 @@
+/* 小说站基础样式（从 /style.css 拆分） */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #faf8f5;
+  --card-bg: #ffffff;
+  --text: #2c2c2c;
+  --text-light: #666;
+  --accent: #d4a574;
+  --accent-dark: #b8895a;
+  --border: #e8e0d8;
+  --shadow: 0 2px 8px rgba(0,0,0,0.06);
+  --radius: 8px;
+  --max-width: 960px;
+  --reading-width: 720px;
+  --font-size: 17px;
+  --line-height: 2;
+  --letter-spacing: 0.02em;
+  --font-family: 'Georgia', 'Noto Serif SC', 'Source Han Serif CN', serif;
+}
+
+body {
+  font-family: var(--font-family);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.8;
+  min-height: 100vh;
+  transition: background 0.3s, color 0.3s;
+}
+
+.container {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: 24px;
+}
+

@@ -1,0 +1,102 @@
+/* 阅读页 */
+.reader {
+  max-width: var(--reading-width);
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+.reader h2 {
+  font-size: 22px;
+  text-align: center;
+  margin-bottom: 32px;
+  color: var(--text);
+}
+.reader-content {
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+  color: var(--text);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  text-indent: 2em;
+  letter-spacing: var(--letter-spacing);
+  text-align: justify;
+}
+
+/* 阅读工具栏 */
+.reader-toolbar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding: 10px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/* 阅读进度条 */
+.progress-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  background: var(--accent);
+  z-index: 999;
+  transition: width 0.1s;
+}
+
+/* 导航 */
+.reader-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+.reader-nav a, .reader-nav span {
+  color: var(--accent-dark);
+  text-decoration: none;
+  font-size: 14px;
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: background 0.15s;
+}
+.reader-nav a:hover { background: rgba(128,128,128,0.08); }
+.reader-nav .disabled { color: #999; pointer-events: none; border-color: var(--border); opacity: 0.5; }
+
+/* 面包屑 */
+.breadcrumb {
+  font-size: 13px;
+  color: var(--text-light);
+  margin-bottom: 16px;
+}
+.breadcrumb a { color: var(--accent-dark); text-decoration: none; }
+.breadcrumb a:hover { text-decoration: underline; }
+.breadcrumb span { margin: 0 6px; }
+
+/* 返回顶部 */
+.back-to-top {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  width: 44px;
+  height: 44px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  font-size: 20px;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  z-index: 998;
+  transition: opacity 0.3s;
+}
+.back-to-top.visible { display: flex; }
+.back-to-top:hover { background: var(--accent-dark); }
+.back-to-top.has-bar { bottom: 80px; }
+

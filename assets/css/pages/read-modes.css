@@ -1,0 +1,102 @@
+/* ===== 翻页模式 ===== */
+body.pager-mode { overflow: hidden; }
+body.pager-mode .progress-bar { display: none; }
+body.pager-mode .back-to-top { display: none !important; }
+body.pager-mode .reader {
+  height: calc(100vh - 100px);
+  overflow: hidden;
+  padding-bottom: 0;
+}
+body.pager-mode .reader-content {
+  column-width: 100%;
+  column-count: 1;
+  column-gap: 0;
+  height: 100%;
+  overflow: hidden;
+  transition: transform 0.35s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  will-change: transform;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+body.pager-mode .reader-nav { display: none; }
+body.pager-mode .breadcrumb { display: none; }
+body.pager-mode .reader h2 { margin-bottom: 16px; font-size: 18px; }
+
+/* 翻页点击区域 */
+.pager-tap-left,
+.pager-tap-right {
+  position: fixed;
+  top: 0;
+  bottom: 60px;
+  z-index: 50;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.pager-tap-left { left: 0; width: 35%; }
+.pager-tap-right { right: 0; width: 35%; }
+
+/* 页码指示器 */
+.pager-indicator {
+  position: fixed;
+  bottom: 52px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-light);
+  padding: 4px 0;
+  z-index: 998;
+  background: var(--bg);
+  display: none;
+  transition: background 0.3s, color 0.3s;
+}
+body.pager-mode .pager-indicator { display: block; }
+
+/* 设置面板 - 阅读模式选项 */
+.mode-options { display: flex; gap: 8px; }
+.mode-option {
+  padding: 6px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+  transition: border-color 0.15s, background 0.15s;
+}
+.mode-option:hover { border-color: var(--accent); }
+.mode-option.active { border-color: var(--accent); background: var(--accent); color: #fff; }
+
+/* 翻页模式下移动端适配 */
+@media (max-width: 640px) {
+  body.pager-mode .reader {
+    height: calc(100vh - 90px);
+    padding: 12px 16px 0;
+  }
+  .pager-tap-left,
+  .pager-tap-right { bottom: 50px; }
+  .pager-indicator { bottom: 44px; font-size: 11px; }
+}
+
+/* ===== 沉浸模式 ===== */
+body.immersive .navbar,
+body.immersive .reader-bottom-bar,
+body.immersive .breadcrumb,
+body.immersive .pager-indicator,
+body.immersive .progress-bar,
+body.immersive .back-to-top,
+body.immersive .reader-nav { display: none !important; }
+body.immersive .reader { max-width: 100%; padding: 2rem 5vw; height: 100vh; overflow-y: auto; }
+body.immersive.pager-mode .reader { height: 100vh; }
+body.immersive .pager-tap-left,
+body.immersive .pager-tap-right { bottom: 0; }
+
+/* 沉浸模式退出提示 */
+.immersive-hint {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: rgba(0,0,0,0.6); color: #fff; padding: 8px 20px;
+  border-radius: 20px; font-size: 13px; z-index: 9999;
+  opacity: 0; transition: opacity 0.5s; pointer-events: none;
+}
+.immersive-hint.show { opacity: 1; }
+

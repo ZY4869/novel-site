@@ -1,0 +1,9 @@
+/* 公共组件样式聚合（从 /style.css 拆分） */
+@import url('/assets/css/components/navbar.css');
+@import url('/assets/css/components/buttons.css');
+@import url('/assets/css/components/books.css');
+@import url('/assets/css/components/reader.css');
+@import url('/assets/css/components/messages.css');
+@import url('/assets/css/components/search.css');
+@import url('/assets/css/components/tags.css');
+

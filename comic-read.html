@@ -5,7 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>漫画阅读</title>
   <meta name="description" content="">
-  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/assets/css/base.css">
+  <link rel="stylesheet" href="/assets/css/theme.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+  <link rel="stylesheet" href="/assets/css/responsive.css">
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#d4a574">
 </head>
@@ -14,7 +17,7 @@
     <h1><a href="/">📚 我的书架</a></h1>
     <nav>
       <a href="/comics.html" id="back-link">返回漫画</a>
-      <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">🌙</button>
+      <button class="theme-toggle" title="切换主题">🌙</button>
     </nav>
   </div>
   <div class="container">
@@ -32,146 +35,7 @@
       <button class="btn btn-sm" id="next-btn">下一页</button>
     </div>
   </div>
-
-  <script>
-    // 主题
-    const THEMES = ['light','dark','green','sepia','blue'];
-    const THEME_ICONS = {'light':'🌙','dark':'☀️','green':'🍃','sepia':'📜','blue':'💧'};
-    const savedTheme = localStorage.getItem('theme') || 'light';
-    document.documentElement.setAttribute('data-theme', savedTheme);
-    updateThemeBtn();
-    function toggleTheme() {
-      const current = document.documentElement.getAttribute('data-theme');
-      const idx = THEMES.indexOf(current);
-      const next = THEMES[(idx + 1) % THEMES.length];
-      document.documentElement.setAttribute('data-theme', next);
-      localStorage.setItem('theme', next);
-      updateThemeBtn();
-    }
-    function updateThemeBtn() {
-      const btn = document.querySelector('.theme-toggle');
-      const t = document.documentElement.getAttribute('data-theme');
-      btn.textContent = THEME_ICONS[t] || '🌙';
-    }
-
-    // PWA Service Worker
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
-    }
-
-    // 加载站点设置
-    fetch('/api/settings').then(r => r.json()).then(d => {
-      const s = d.settings || {};
-      if (s.site_name) document.querySelector('.navbar h1 a').textContent = '📚 ' + s.site_name;
-    }).catch(() => {});
-
-    function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
-    function showMsg(text, type) {
-      const el = document.getElementById('msg');
-      el.className = type ? `msg msg-${type}` : '';
-      el.textContent = text || '';
-    }
-
-    const qs = new URLSearchParams(location.search);
-    const comicId = qs.get('id');
-    if (!comicId || !/^\d+$/.test(comicId)) {
-      document.getElementById('loading').textContent = '无效的漫画ID';
-    } else {
-      init();
-    }
-
-    let comic = null;
-    let currentPage = 1;
-
-    function getSavedPage(id) {
-      try {
-        const v = JSON.parse(localStorage.getItem('comic_reading_' + id));
-        return v && v.page ? Number(v.page) : null;
-      } catch { return null; }
-    }
-    function saveProgress(id, page, title) {
-      try {
-        localStorage.setItem('comic_reading_' + id, JSON.stringify({ page, title, time: Date.now() }));
-      } catch {}
-    }
-
-    async function init() {
-      try {
-        const res = await fetch(`/api/comics/${comicId}`);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || '加载失败');
-        comic = data.comic;
-        document.title = (comic.title || '漫画阅读') + ' - 我的书架';
-        document.getElementById('breadcrumb').innerHTML = `<a href="/comics.html">漫画</a><span>›</span><span>${esc(comic.title || '未命名')}</span>`;
-
-        const pageParam = qs.get('page');
-        const saved = getSavedPage(comicId);
-        currentPage = pageParam && /^\d+$/.test(pageParam) ? Number(pageParam) : (saved || 1);
-        if (currentPage < 1) currentPage = 1;
-        if (comic.page_count && currentPage > comic.page_count) currentPage = comic.page_count;
-
-        bindControls();
-        await loadPage(currentPage, true);
-      } catch (e) {
-        showMsg(e.message, 'error');
-        document.getElementById('loading').textContent = '加载失败';
-      }
-    }
-
-    function bindControls() {
-      document.getElementById('prev-btn').addEventListener('click', () => goPage(currentPage - 1));
-      document.getElementById('next-btn').addEventListener('click', () => goPage(currentPage + 1));
-      window.addEventListener('keydown', (e) => {
-        if (e.key === 'ArrowLeft') goPage(currentPage - 1);
-        if (e.key === 'ArrowRight') goPage(currentPage + 1);
-      });
-    }
-
-    async function goPage(page) {
-      if (!comic) return;
-      if (page < 1) return;
-      if (comic.page_count && page > comic.page_count) return;
-      await loadPage(page, false);
-    }
-
-    async function loadPage(page, replaceState) {
-      showMsg('', '');
-      const img = document.getElementById('page-img');
-      const loading = document.getElementById('loading');
-      img.style.display = 'none';
-      loading.style.display = '';
-      loading.textContent = '加载中...';
-
-      const pageCount = comic?.page_count || 0;
-      document.getElementById('page-indicator').textContent = pageCount ? `第 ${page} / ${pageCount} 页` : `第 ${page} 页`;
-      document.getElementById('prev-btn').disabled = page <= 1;
-      document.getElementById('next-btn').disabled = pageCount ? page >= pageCount : false;
-
-      const url = new URL(location.href);
-      url.searchParams.set('id', String(comicId));
-      url.searchParams.set('page', String(page));
-      if (replaceState) history.replaceState(null, '', url.toString());
-      else history.pushState(null, '', url.toString());
-
-      const src = `/api/comics/${comicId}/pages/${page}`;
-      img.alt = comic?.title ? comic.title + ' - ' + page : 'page ' + page;
-      img.src = src;
-      currentPage = page;
-
-      const ok = await new Promise(resolve => {
-        img.onload = () => resolve(true);
-        img.onerror = () => resolve(false);
-      });
-
-      loading.style.display = 'none';
-      if (!ok) {
-        showMsg('加载图片失败，可能该页不存在或网络异常。', 'error');
-        return;
-      }
-      img.style.display = '';
-      saveProgress(comicId, page, comic?.title || '');
-    }
-  </script>
+  <script type="module" src="/assets/js/pages/comic-read.js"></script>
 </body>
 </html>
 

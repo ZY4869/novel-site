@@ -1,0 +1,50 @@
+/* 主题变量（从 /style.css 拆分） */
+
+/* 夜间模式 */
+[data-theme="dark"] {
+  --bg: #1a1a2e;
+  --card-bg: #16213e;
+  --text: #e0e0e0;
+  --text-light: #a0a0a0;
+  --accent: #e2b07a;
+  --accent-dark: #c89660;
+  --border: #2a2a4a;
+  --shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+/* 护眼模式 */
+[data-theme="green"] {
+  --bg: #c7edcc;
+  --card-bg: #d4f2d8;
+  --text: #2c3e2c;
+  --text-light: #556b55;
+  --accent: #6aab6a;
+  --accent-dark: #4e8f4e;
+  --border: #a8d8a8;
+  --shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+/* 羊皮纸模式 */
+[data-theme="sepia"] {
+  --bg: #f5e6c8;
+  --card-bg: #faf0dc;
+  --text: #5b4636;
+  --text-light: #8b7355;
+  --accent: #c49a6c;
+  --accent-dark: #a67c52;
+  --border: #dcc8a0;
+  --shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+/* 淡蓝模式 */
+[data-theme="blue"] {
+  --bg: #e8f0fe;
+  --card-bg: #f0f5ff;
+  --text: #2c3e50;
+  --text-light: #5a7a9a;
+  --accent: #5b9bd5;
+  --accent-dark: #4178b0;
+  --border: #c0d8f0;
+  --shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+

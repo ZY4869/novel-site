@@ -68,8 +68,8 @@ export async function onRequest(context) {
     // CSP：默认仅允许同源脚本。管理后台的 EPUB 导入依赖 JSZip（CDN），仅对 /admin.html 放开该域名。
     const isAdminPage = url.pathname === '/admin.html' || url.pathname === '/admin';
     const scriptSrc = isAdminPage
-      ? "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net"
-      : "script-src 'self' 'unsafe-inline'";
+      ? "script-src 'self' https://cdn.jsdelivr.net"
+      : "script-src 'self'";
     response.headers.set(
       'Content-Security-Policy',
       `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; frame-ancestors 'none'`
