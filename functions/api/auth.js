@@ -107,6 +107,27 @@ export async function onRequestGet(context) {
       return Response.json({ error: 'GitHub OAuth 未配置' }, { status: 500 });
     }
 
+    // IP限流：每IP每分钟最多5次OAuth请求（防state存储DoS）
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+    const ipHash = await sha256Hash('oauth_rate:' + ip);
+    const rateRow = await env.DB.prepare('SELECT fail_count, last_attempt FROM auth_attempts WHERE ip_hash = ?').bind(ipHash).first();
+    if (rateRow) {
+      const elapsed = Date.now() - new Date(rateRow.last_attempt).getTime();
+      if (elapsed < 60000 && rateRow.fail_count >= 5) {
+        return Response.json({ error: '请求过于频繁，请稍后再试' }, { status: 429 });
+      }
+      if (elapsed < 60000) {
+        await env.DB.prepare("UPDATE auth_attempts SET fail_count = fail_count + 1, last_attempt = datetime('now') WHERE ip_hash = ?").bind(ipHash).run();
+      } else {
+        await env.DB.prepare("UPDATE auth_attempts SET fail_count = 1, last_attempt = datetime('now') WHERE ip_hash = ?").bind(ipHash).run();
+      }
+    } else {
+      await env.DB.prepare("INSERT INTO auth_attempts (ip_hash, fail_count, last_attempt) VALUES (?, 1, datetime('now'))").bind(ipHash).run();
+    }
+
+    // 清理过期的OAuth state（防表膨胀）
+    await env.DB.prepare("DELETE FROM site_settings WHERE key LIKE 'oauth_state:%' AND value < datetime('now')").run().catch(() => {});
+
     // 生成随机 state
     const stateBytes = new Uint8Array(32);
     crypto.getRandomValues(stateBytes);

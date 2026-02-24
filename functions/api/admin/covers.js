@@ -23,8 +23,18 @@ export async function onRequestPost(context) {
   if (!file || !file.size) return Response.json({ error: 'No file uploaded' }, { status: 400 });
   if (file.size > 5 * 1024 * 1024) return Response.json({ error: 'File too large (max 5MB)' }, { status: 400 });
 
-  const ct = file.type || 'image/jpeg';
-  if (!ct.startsWith('image/')) return Response.json({ error: 'Only images allowed' }, { status: 400 });
+  const ct = file.type || '';
+  const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+  if (!ALLOWED_TYPES.includes(ct)) return Response.json({ error: '仅支持 JPEG、PNG、WebP 格式' }, { status: 400 });
+
+  // 验证文件头魔数（防止伪造Content-Type）
+  const headerBuf = await file.slice(0, 16).arrayBuffer();
+  const header = new Uint8Array(headerBuf);
+  const isJpeg = header[0] === 0xFF && header[1] === 0xD8;
+  const isPng = header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4E && header[3] === 0x47;
+  const isWebp = header[0] === 0x52 && header[1] === 0x49 && header[2] === 0x46 && header[3] === 0x46
+    && header[8] === 0x57 && header[9] === 0x45 && header[10] === 0x42 && header[11] === 0x50;
+  if (!isJpeg && !isPng && !isWebp) return Response.json({ error: '文件内容不是有效的图片格式' }, { status: 400 });
 
   const ext = ct.includes('png') ? 'png' : ct.includes('webp') ? 'webp' : 'jpg';
   const key = `covers/${bookId}.${ext}`;

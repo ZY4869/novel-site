@@ -40,6 +40,17 @@ export async function onRequestPost(context) {
     auth.userId
   ).run();
 
+  // demo配额二次检查（防TOCTOU竞态绕过）
+  if (!requireMinRole(auth, 'admin')) {
+    const { count } = await env.DB.prepare(
+      'SELECT COUNT(*) as count FROM books WHERE created_by = ?'
+    ).bind(auth.userId).first();
+    if (count > 10) {
+      await env.DB.prepare('DELETE FROM books WHERE id = ?').bind(result.meta.last_row_id).run().catch(() => {});
+      return Response.json({ error: '演示账号最多创建 10 本书' }, { status: 403 });
+    }
+  }
+
   return Response.json({
     success: true,
     book: { id: result.meta.last_row_id, title: title.trim() }

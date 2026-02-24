@@ -8,11 +8,13 @@ export async function onRequestGet(context) {
   const state = url.searchParams.get('state');
   const error = url.searchParams.get('error');
 
-  // GitHub 返回错误（用户拒绝授权等）
+  // GitHub 返回错误（用户拒绝授权等）— 白名单过滤防钓鱼
   if (error) {
+    const KNOWN_ERRORS = ['access_denied', 'redirect_uri_mismatch', 'application_suspended', 'incorrect_client_credentials'];
+    const safeError = KNOWN_ERRORS.includes(error) ? error : 'unknown_error';
     return new Response(null, {
       status: 302,
-      headers: { 'Location': '/admin.html#github_error=' + encodeURIComponent(error) }
+      headers: { 'Location': '/admin.html#github_error=' + safeError }
     });
   }
 
@@ -115,6 +117,18 @@ export async function onRequestGet(context) {
   const ghUser = await userRes.json();
   // access_token 到此为止，不存储
 
+  // 验证 GitHub 返回数据的基本完整性
+  if (!ghUser.id || ghUser.id < 1 || !ghUser.login) {
+    return new Response(null, {
+      status: 302,
+      headers: { 'Location': '/admin.html#github_error=invalid_user_data' }
+    });
+  }
+
+  // avatar_url 只允许 GitHub 官方头像域名，否则置空
+  const safeAvatarUrl = (ghUser.avatar_url && /^https:\/\/avatars\.githubusercontent\.com\//.test(ghUser.avatar_url))
+    ? ghUser.avatar_url : '';
+
   // 4. 防滥用：检查 GitHub 账号年龄（至少 7 天）
   const accountAge = Date.now() - new Date(ghUser.created_at).getTime();
   if (accountAge < 7 * 24 * 60 * 60 * 1000) {
@@ -149,7 +163,7 @@ export async function onRequestGet(context) {
 
     await env.DB.prepare(
       "INSERT INTO admin_users (username, password_hash, role, github_id, github_login, avatar_url) VALUES (?, 'github_oauth:no_password', 'demo', ?, ?, ?)"
-    ).bind(finalUsername, ghUser.id, ghUser.login, ghUser.avatar_url || '').run();
+    ).bind(finalUsername, ghUser.id, ghUser.login, safeAvatarUrl).run();
 
     user = await env.DB.prepare(
       'SELECT id, username, role FROM admin_users WHERE github_id = ?'
@@ -158,7 +172,7 @@ export async function onRequestGet(context) {
     // 已有用户：更新 GitHub 信息（用户名/头像可能变了）
     await env.DB.prepare(
       "UPDATE admin_users SET github_login = ?, avatar_url = ?, updated_at = datetime('now') WHERE id = ?"
-    ).bind(ghUser.login, ghUser.avatar_url || '', user.id).run();
+    ).bind(ghUser.login, safeAvatarUrl, user.id).run();
   }
 
   // 6. 创建 session token（复用现有机制）

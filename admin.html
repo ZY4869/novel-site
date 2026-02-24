@@ -1130,7 +1130,7 @@
       el.textContent=text;
       if (type==='success') setTimeout(()=>{el.className='';el.textContent='';},5000);
     }
-    function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+    function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML.replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
     document.getElementById('chapter-content').addEventListener('input',function(){
       document.getElementById('word-count').textContent=this.value.trim().length;

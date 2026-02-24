@@ -25,7 +25,7 @@ export async function onRequestGet(context) {
   // 从R2读取正文内容（需要单独查content_key）
   let content = '';
   const chapterFull = await env.DB.prepare('SELECT content_key FROM chapters WHERE id = ?').bind(id).first();
-  if (chapterFull) {
+  if (chapterFull && chapterFull.content_key && chapterFull.content_key !== 'pending') {
     const r2Object = await env.R2.get(chapterFull.content_key);
     if (r2Object) content = await r2Object.text();
   }

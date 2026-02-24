@@ -33,12 +33,13 @@ export async function onRequestPut(context) {
 
   const { title, content, version } = body;
 
-  // 乐观锁：如果前端传了version，检查是否匹配
-  if (version !== undefined) {
-    const currentVersion = chapter.version || 0;
-    if (Number(version) !== currentVersion) {
-      return Response.json({ error: '内容已被其他人修改，请刷新后重试' }, { status: 409 });
-    }
+  // 乐观锁：章节已有version时，必须携带version字段
+  const currentVersion = chapter.version || 0;
+  if (content && currentVersion > 0 && version === undefined) {
+    return Response.json({ error: '请提供 version 字段以防止并发冲突' }, { status: 400 });
+  }
+  if (version !== undefined && Number(version) !== currentVersion) {
+    return Response.json({ error: '内容已被其他人修改，请刷新后重试' }, { status: 409 });
   }
 
   if (title && typeof title === 'string' && title.trim().length > 0) {

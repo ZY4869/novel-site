@@ -24,10 +24,21 @@ export async function onRequestPut(context) {
     return Response.json({ error: '只能管理自己书籍的标签' }, { status: 403 });
   }
 
+  // 验证tag_id确实存在于tags表中，过滤无效ID
+  let validTagIds = body.tag_ids;
+  if (validTagIds.length > 0) {
+    const placeholders = validTagIds.map(() => '?').join(',');
+    const { results: validTags } = await env.DB.prepare(
+      `SELECT id FROM tags WHERE id IN (${placeholders})`
+    ).bind(...validTagIds.map(Number)).all();
+    const validSet = new Set(validTags.map(t => t.id));
+    validTagIds = validTagIds.filter(id => validSet.has(Number(id)));
+  }
+
   // 原子操作：先删后插
   const stmts = [
     env.DB.prepare('DELETE FROM book_tags WHERE book_id = ?').bind(bookId),
-    ...body.tag_ids.map(tagId =>
+    ...validTagIds.map(tagId =>
       env.DB.prepare('INSERT OR IGNORE INTO book_tags (book_id, tag_id) VALUES (?, ?)').bind(bookId, tagId)
     ),
   ];

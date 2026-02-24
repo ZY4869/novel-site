@@ -297,7 +297,7 @@ async function clearFailedAttempts(env, ip) {
 }
 
 // ===== 工具函数 =====
-export function validateId(id) { return /^\d+$/.test(id); }
+export function validateId(id) { return /^\d{1,18}$/.test(id) && Number(id) > 0; }
 
 // 角色层级：super_admin > admin > demo（editor是admin的旧名，兼容）
 const ROLE_LEVEL = { super_admin: 3, admin: 2, editor: 2, demo: 1 };

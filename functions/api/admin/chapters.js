@@ -93,6 +93,18 @@ export async function onRequestPost(context) {
   await env.DB.prepare("UPDATE books SET updated_at = datetime('now') WHERE id = ?")
     .bind(book_id).run();
 
+  // demo章节配额二次检查（防TOCTOU竞态绕过）
+  if (!requireMinRole(auth, 'admin')) {
+    const { count } = await env.DB.prepare(
+      'SELECT COUNT(*) as count FROM chapters WHERE book_id = ?'
+    ).bind(book_id).first();
+    if (count > 200) {
+      await env.DB.prepare('DELETE FROM chapters WHERE id = ?').bind(chapterId).run().catch(() => {});
+      await env.R2.delete(contentKey).catch(() => {});
+      return Response.json({ error: '演示账号每本书最多 200 章' }, { status: 403 });
+    }
+  }
+
   return Response.json({
     success: true,
     chapter: { id: chapterId, title: title.trim(), sort_order: sortOrder, word_count: wordCount }
