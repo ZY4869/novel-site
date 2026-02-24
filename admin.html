@@ -376,13 +376,16 @@
             <button class="btn" onclick="createAdmin()">创建</button>
           </div>
           <div style="margin-top:4px">
-            <label style="font-size:12px;color:var(--text-light)">
-              <input type="checkbox" id="new-admin-super"> 超级管理员权限
-            </label>
+            <label style="font-size:12px;color:var(--text-light)">角色：</label>
+            <select id="new-admin-role" style="padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:13px">
+              <option value="demo">演示管理员</option>
+              <option value="admin">管理员</option>
+              <option value="super_admin">超级管理员</option>
+            </select>
           </div>
           <div style="margin-top:4px">
             <label style="font-size:12px;color:var(--text-light)">
-              <input type="checkbox" id="new-admin-pwd-lock"> 禁止修改密码（演示账号用）
+              <input type="checkbox" id="new-admin-pwd-lock"> 禁止修改密码
             </label>
           </div>
           <div id="admin-user-msg"></div>
@@ -416,6 +419,7 @@
     // ===== 认证 =====
     let authToken = sessionStorage.getItem('auth_token') || '';
     let currentRole = sessionStorage.getItem('auth_role') || '';
+    let currentUserId = Number(sessionStorage.getItem('auth_uid')) || 0;
     let currentPasswordLocked = false;
 
     function getToken() { return authToken; }
@@ -432,9 +436,11 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
         authToken = data.token;
-        currentRole = data.role || 'editor';
+        currentRole = data.role || 'demo';
+        currentUserId = data.userId || 0;
         sessionStorage.setItem('auth_token', authToken);
         sessionStorage.setItem('auth_role', currentRole);
+        sessionStorage.setItem('auth_uid', currentUserId);
         showAdminPanel(data.username, currentRole);
       } catch(e) { showMsg('login-msg', e.message, 'error'); }
     }
@@ -445,11 +451,11 @@
         const res = await fetch('/api/auth?action=me', {
           headers:{'Authorization':'Bearer '+authToken}
         });
-        if (!res.ok) { authToken=''; currentRole=''; sessionStorage.removeItem('auth_token'); sessionStorage.removeItem('auth_role'); return false; }
+        if (!res.ok) { authToken=''; currentRole=''; currentUserId=0; sessionStorage.removeItem('auth_token'); sessionStorage.removeItem('auth_role'); sessionStorage.removeItem('auth_uid'); return false; }
         const data = await res.json();
-        if (data.authenticated) { currentRole = data.role || 'editor'; currentPasswordLocked = !!data.passwordLocked; sessionStorage.setItem('auth_role', currentRole); showAdminPanel(data.username, currentRole); return true; }
+        if (data.authenticated) { currentRole = data.role || 'demo'; currentUserId = data.userId || 0; currentPasswordLocked = !!data.passwordLocked; sessionStorage.setItem('auth_role', currentRole); sessionStorage.setItem('auth_uid', currentUserId); showAdminPanel(data.username, currentRole); return true; }
       } catch {}
-      authToken=''; currentRole=''; sessionStorage.removeItem('auth_token'); sessionStorage.removeItem('auth_role');
+      authToken=''; currentRole=''; currentUserId=0; sessionStorage.removeItem('auth_token'); sessionStorage.removeItem('auth_role'); sessionStorage.removeItem('auth_uid');
       return false;
     }
 
@@ -457,14 +463,17 @@
       document.getElementById('login-panel').style.display = 'none';
       document.getElementById('admin-panel').style.display = 'block';
       document.getElementById('current-user').textContent = username;
-      document.getElementById('user-info').textContent = username + (role === 'super_admin' ? ' (超管)' : ' (编辑)');
+      document.getElementById('user-info').textContent = username + (role === 'super_admin' ? ' (超管)' : role === 'admin' ? ' (管理)' : ' (演示)');
       document.getElementById('user-info').style.display = 'inline';
-      // 密码锁定：隐藏修改密码链接
+      // 密码锁定或demo角色：隐藏修改密码链接
       const pwdLink = document.querySelector('a[onclick*="showChangePassword"]');
-      if (pwdLink) pwdLink.style.display = currentPasswordLocked ? 'none' : '';
+      if (pwdLink) pwdLink.style.display = (currentPasswordLocked || role === 'demo') ? 'none' : '';
       // super_admin专属功能
       const saEls = document.querySelectorAll('.super-admin-only');
       saEls.forEach(el => el.style.display = role === 'super_admin' ? '' : 'none');
+      // demo限制：隐藏EPUB导入和删除书籍
+      const demoHideEls = document.querySelectorAll('.hide-for-demo');
+      demoHideEls.forEach(el => el.style.display = role === 'demo' ? 'none' : '');
       refreshAllBooks(); loadSettings(); loadStats(); loadFontList();
       if (role === 'super_admin') loadAdminUsers();
     }
@@ -473,8 +482,10 @@
       try { await fetch('/api/auth?action=logout',{method:'POST',headers:{'Authorization':'Bearer '+authToken}}); } catch{}
       authToken = '';
       currentRole = '';
+      currentUserId = 0;
       sessionStorage.removeItem('auth_token');
       sessionStorage.removeItem('auth_role');
+      sessionStorage.removeItem('auth_uid');
       document.getElementById('login-panel').style.display = 'block';
       document.getElementById('admin-panel').style.display = 'none';
       document.getElementById('user-info').style.display = 'none';
@@ -751,18 +762,21 @@
           el.innerHTML='<li style="padding:12px 0;color:var(--text-light)">暂无书籍</li>'; _booksCache=[]; return;
         }
         _booksCache = data.books;
-        el.innerHTML=data.books.map(b=>`
+        el.innerHTML=data.books.map(b=>{
+          const isOwner = currentRole !== 'demo' || b.created_by === currentUserId;
+          const canDelete = currentRole !== 'demo' || b.created_by === currentUserId;
+          return `
           <li data-id="${b.id}">
             <div class="item-info">
-              <div class="item-title">${esc(b.title)}</div>
+              <div class="item-title">${esc(b.title)}${currentRole === 'demo' && !isOwner ? ' <span style="font-size:11px;color:var(--text-light)">(他人)</span>' : ''}</div>
               <div class="item-meta">${b.author?esc(b.author)+' · ':''}${b.chapter_count} 章 · ${b.total_words} 字</div>
             </div>
             <div class="item-actions">
-              <button class="btn btn-sm btn-edit-book">编辑</button>
-              <button class="btn btn-sm btn-danger btn-delete-book">删除</button>
+              ${isOwner ? '<button class="btn btn-sm btn-edit-book">编辑</button>' : ''}
+              ${canDelete ? '<button class="btn btn-sm btn-danger btn-delete-book">删除</button>' : ''}
             </div>
           </li>
-        `).join('');
+        `}).join('');
       } catch(e) {
         const el=document.getElementById('book-list');
         el.innerHTML=`<li class="msg msg-error">${esc(e.message)}</li>`;
@@ -793,9 +807,12 @@
 
     function renderBookSelects(data) {
       try {
-        const opts=(!data.books||data.books.length===0)
-          ?'<option value="">请先创建一本书</option>'
-          :data.books.map(b=>`<option value="${b.id}">${esc(b.title)}</option>`).join('');
+        const allBooks = data.books || [];
+        // demo用户只能在添加章节/章节管理/导入中选自己的书
+        const myBooks = currentRole === 'demo' ? allBooks.filter(b => b.created_by === currentUserId) : allBooks;
+        const opts = myBooks.length === 0
+          ? '<option value="">请先创建一本书</option>'
+          : myBooks.map(b => `<option value="${b.id}">${esc(b.title)}</option>`).join('');
         document.getElementById('chapter-book').innerHTML=opts;
         document.getElementById('import-book').innerHTML=opts;
         document.getElementById('manage-book').innerHTML='<option value="">选择书籍...</option>'+opts;
@@ -1036,7 +1053,7 @@
         const el = document.getElementById('admin-users-list');
         if (admins.length === 0) { el.innerHTML = '<p style="color:var(--text-light);font-size:13px">暂无管理员</p>'; return; }
         el.innerHTML = '<table style="width:100%;font-size:14px;border-collapse:collapse"><thead><tr style="border-bottom:2px solid var(--border)"><th style="text-align:left;padding:6px">用户名</th><th style="text-align:left;padding:6px">角色</th><th style="text-align:left;padding:6px">密码</th><th style="text-align:left;padding:6px">创建时间</th><th style="text-align:right;padding:6px">操作</th></tr></thead><tbody>' +
-          admins.map(a => `<tr data-id="${a.id}" data-name="${esc(a.username)}" data-lock="${a.password_locked ? 1 : 0}" style="border-bottom:1px solid var(--border)"><td style="padding:6px">${esc(a.username)}</td><td style="padding:6px"><select class="admin-role-select" data-id="${a.id}" style="padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:13px"><option value="super_admin"${a.role==='super_admin'?' selected':''}>超级管理员</option><option value="editor"${a.role==='editor'?' selected':''}>编辑</option></select></td><td style="padding:6px"><span title="${a.password_locked ? '密码已锁定' : '密码可修改'}">${a.password_locked ? '🔒' : '🔓'}</span> <button class="btn btn-sm btn-toggle-pwd-lock" data-action="toggle-pwd-lock" style="font-size:11px;padding:1px 6px">${a.password_locked ? '解锁' : '锁定'}</button></td><td style="padding:6px;color:var(--text-light);font-size:12px">${a.created_at ? a.created_at.slice(0,10) : '-'}</td><td style="padding:6px;text-align:right"><button class="btn btn-sm btn-danger btn-delete-admin" data-action="delete-admin">删除</button></td></tr>`).join('') +
+          admins.map(a => `<tr data-id="${a.id}" data-name="${esc(a.username)}" data-lock="${a.password_locked ? 1 : 0}" style="border-bottom:1px solid var(--border)"><td style="padding:6px">${esc(a.username)}</td><td style="padding:6px"><select class="admin-role-select" data-id="${a.id}" style="padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:13px"><option value="super_admin"${a.role==='super_admin'?' selected':''}>超级管理员</option><option value="admin"${a.role==='admin'?' selected':''}>管理员</option><option value="demo"${a.role==='demo'?' selected':''}>演示</option></select></td><td style="padding:6px"><span title="${a.password_locked ? '密码已锁定' : '密码可修改'}">${a.password_locked ? '🔒' : '🔓'}</span> <button class="btn btn-sm btn-toggle-pwd-lock" data-action="toggle-pwd-lock" style="font-size:11px;padding:1px 6px">${a.password_locked ? '解锁' : '锁定'}</button></td><td style="padding:6px;color:var(--text-light);font-size:12px">${a.created_at ? a.created_at.slice(0,10) : '-'}</td><td style="padding:6px;text-align:right"><button class="btn btn-sm btn-danger btn-delete-admin" data-action="delete-admin">删除</button></td></tr>`).join('') +
           '</tbody></table>';
       } catch {}
     }
@@ -1064,11 +1081,11 @@
     async function createAdmin() {
       const username = document.getElementById('new-admin-user').value.trim();
       const password = document.getElementById('new-admin-pass').value;
-      const isSuper = document.getElementById('new-admin-super').checked;
+      const role = document.getElementById('new-admin-role').value;
       const pwdLock = document.getElementById('new-admin-pwd-lock').checked;
       if (!username || !password) return showMsg('admin-user-msg', '请填写用户名和密码', 'error');
       try {
-        const res = await api('POST', '/api/admin/users', { username, password, role: isSuper ? 'super_admin' : 'editor', password_locked: pwdLock ? 1 : 0 });
+        const res = await api('POST', '/api/admin/users', { username, password, role, password_locked: pwdLock ? 1 : 0 });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
         showMsg('admin-user-msg', data.message, 'success');
@@ -1305,10 +1322,12 @@
         const res = await fetch('/api/books');
         const data = await res.json();
         const sel = document.getElementById('epub-book-select');
-        if (!data.books || data.books.length === 0) {
+        const allBooks = data.books || [];
+        const myBooks = currentRole === 'demo' ? allBooks.filter(b => b.created_by === currentUserId) : allBooks;
+        if (myBooks.length === 0) {
           sel.innerHTML = '<option value="">请先创建一本书</option>';
         } else {
-          sel.innerHTML = data.books.map(b => `<option value="${b.id}">${esc(b.title)}</option>`).join('');
+          sel.innerHTML = myBooks.map(b => `<option value="${b.id}">${esc(b.title)}</option>`).join('');
         }
       } catch {}
     }

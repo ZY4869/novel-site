@@ -1,5 +1,5 @@
 // POST /api/admin/chapters/swap — 交换两个章节的排序（原子操作）
-import { checkAdmin, validateId, parseJsonBody } from '../../_utils.js';
+import { checkAdmin, validateId, parseJsonBody, checkBookOwnership } from '../../_utils.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -22,9 +22,17 @@ export async function onRequestPost(context) {
     return Response.json({ error: 'IDs must be different' }, { status: 400 });
   }
 
-  const c1 = await env.DB.prepare('SELECT id, sort_order FROM chapters WHERE id = ?').bind(id1).first();
-  const c2 = await env.DB.prepare('SELECT id, sort_order FROM chapters WHERE id = ?').bind(id2).first();
+  const c1 = await env.DB.prepare('SELECT id, book_id, sort_order FROM chapters WHERE id = ?').bind(id1).first();
+  const c2 = await env.DB.prepare('SELECT id, book_id, sort_order FROM chapters WHERE id = ?').bind(id2).first();
   if (!c1 || !c2) return Response.json({ error: 'Chapter not found' }, { status: 404 });
+
+  // demo只能操作自己书的章节（两侧都检查）
+  if (!await checkBookOwnership(auth, env, c1.book_id)) {
+    return Response.json({ error: '只能操作自己书籍的章节' }, { status: 403 });
+  }
+  if (!await checkBookOwnership(auth, env, c2.book_id)) {
+    return Response.json({ error: '只能操作自己书籍的章节' }, { status: 403 });
+  }
 
   // 原子操作：batch交换sort_order
   await env.DB.batch([

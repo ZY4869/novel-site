@@ -31,8 +31,8 @@ export async function onRequestPost(context) {
   if (password.length < 8) return Response.json({ error: '密码至少8位' }, { status: 400 });
   if (!/[a-zA-Z]/.test(password) || !/\d/.test(password)) return Response.json({ error: '密码需包含字母和数字' }, { status: 400 });
 
-  const validRoles = ['super_admin', 'editor'];
-  const userRole = validRoles.includes(role) ? role : 'editor';
+  const validRoles = ['super_admin', 'admin', 'demo'];
+  const userRole = validRoles.includes(role) ? role : 'demo';
   const pwdLocked = password_locked === 1 ? 1 : 0;
 
   const existing = await env.DB.prepare('SELECT id FROM admin_users WHERE username = ?').bind(username).first();
@@ -70,6 +70,8 @@ export async function onRequestDelete(context) {
   }
 
   await env.DB.prepare('DELETE FROM admin_sessions WHERE user_id = ?').bind(body.id).run();
+  // 将该用户创建的书籍转为无主（防ID复用导致权限混乱）
+  await env.DB.prepare('UPDATE books SET created_by = NULL WHERE created_by = ?').bind(body.id).run();
   await env.DB.prepare('DELETE FROM admin_users WHERE id = ?').bind(body.id).run();
 
   return Response.json({ success: true, message: `管理员 ${user.username} 已删除` });
@@ -92,7 +94,7 @@ export async function onRequestPut(context) {
   if (!hasRole && !hasPwdLock) return Response.json({ error: '缺少参数' }, { status: 400 });
 
   if (hasRole) {
-    const validRoles = ['super_admin', 'editor'];
+    const validRoles = ['super_admin', 'admin', 'demo'];
     if (!validRoles.includes(body.role)) return Response.json({ error: '无效的角色' }, { status: 400 });
 
     // 不能降级自己

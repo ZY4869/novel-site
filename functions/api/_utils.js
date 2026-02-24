@@ -68,6 +68,10 @@ async function ensureSchema(env) {
   } catch {
     // 列已存在，静默忽略
   }
+  // 书籍所有者
+  try {
+    await env.DB.prepare('ALTER TABLE books ADD COLUMN created_by INTEGER DEFAULT NULL').run();
+  } catch {}
   // 书籍封面
   try {
     await env.DB.prepare('ALTER TABLE books ADD COLUMN cover_key TEXT DEFAULT NULL').run();
@@ -131,7 +135,9 @@ export async function checkAdmin(request, env) {
     await env.DB.prepare("DELETE FROM auth_attempts WHERE last_attempt < datetime('now', '-1 day')").run().catch(() => {});
   }
 
-  return { ok: true, userId: session.user_id, username: session.username, role: session.role || 'editor', passwordLocked: session.password_locked === 1 };
+    // 兼容旧角色：editor → admin
+  const role = session.role === 'editor' ? 'admin' : (session.role || 'demo');
+  return { ok: true, userId: session.user_id, username: session.username, role, passwordLocked: session.password_locked === 1 };
 }
 
 // ===== 登录 =====
@@ -181,7 +187,8 @@ export async function login(env, username, password, ip) {
   await env.DB.prepare("DELETE FROM admin_sessions WHERE expires_at < datetime('now')").run().catch(() => {});
   await env.DB.prepare("DELETE FROM auth_attempts WHERE last_attempt < datetime('now', '-1 day')").run().catch(() => {});
 
-  return { ok: true, token, username: user.username, role: user.role || 'editor', expiresAt };
+  const loginRole = user.role === 'editor' ? 'admin' : (user.role || 'demo');
+  return { ok: true, token, username: user.username, role: loginRole, userId: user.id, expiresAt };
 }
 
 // ===== 修改密码 =====
@@ -254,8 +261,26 @@ async function clearFailedAttempts(env, ip) {
 // ===== 工具函数 =====
 export function validateId(id) { return /^\d+$/.test(id); }
 
+// 角色层级：super_admin > admin > demo（editor是admin的旧名，兼容）
+const ROLE_LEVEL = { super_admin: 3, admin: 2, editor: 2, demo: 1 };
+
 export function requireSuperAdmin(auth) {
   return auth.role === 'super_admin';
+}
+
+// 检查是否满足最低角色要求
+export function requireMinRole(auth, minRole) {
+  return (ROLE_LEVEL[auth.role] || 0) >= (ROLE_LEVEL[minRole] || 99);
+}
+
+// demo角色的书籍所有权检查：返回true表示允许操作
+export async function checkBookOwnership(auth, env, bookId) {
+  // admin及以上不受限
+  if (requireMinRole(auth, 'admin')) return true;
+  // demo只能操作自己创建的书
+  const book = await env.DB.prepare('SELECT created_by FROM books WHERE id = ?').bind(bookId).first();
+  if (!book) return false; // 书不存在
+  return book.created_by === auth.userId;
 }
 
 export async function parseJsonBody(request) {

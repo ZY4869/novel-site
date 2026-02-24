@@ -24,11 +24,12 @@ export async function onRequestPost(context) {
   }
 
   const result = await env.DB.prepare(`
-    INSERT INTO books (title, description, author) VALUES (?, ?, ?)
+    INSERT INTO books (title, description, author, created_by) VALUES (?, ?, ?, ?)
   `).bind(
     title.trim(),
     (description || '').trim().slice(0, 2000),
-    (author || '').trim().slice(0, 100)
+    (author || '').trim().slice(0, 100),
+    auth.userId
   ).run();
 
   return Response.json({

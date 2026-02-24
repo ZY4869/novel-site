@@ -9,8 +9,9 @@ export async function onRequestGet(context) {
     return Response.json({ error: 'Invalid book ID' }, { status: 400 });
   }
 
-  const book = await env.DB.prepare('SELECT * FROM books WHERE id = ?')
-    .bind(id).first();
+  const book = await env.DB.prepare(
+    'SELECT id, title, author, description, cover_key, created_at, updated_at FROM books WHERE id = ?'
+  ).bind(id).first();
 
   if (!book) {
     return Response.json({ error: 'Book not found' }, { status: 404 });
