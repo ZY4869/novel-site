@@ -25,6 +25,10 @@ self.addEventListener('fetch', (e) => {
   // Skip non-GET
   if (e.request.method !== 'GET') return;
 
+  // Skip non-HTTP(S) and cross-origin requests (e.g. browser extensions / CDNs)
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+  if (url.origin !== self.location.origin) return;
+
   // Admin API: always network (no caching)
   if (url.pathname.startsWith('/api/admin') || url.pathname.startsWith('/api/auth')) return;
 
