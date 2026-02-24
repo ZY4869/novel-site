@@ -5,7 +5,7 @@ compatibility_date = "2026-02-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "novel-db"
-database_id = "807ef966-4df8-4eca-bcad-95d186775be0"
+database_id = "c3791335-7790-4144-b9b7-4fe17d561067"
 
 [[r2_buckets]]
 binding = "R2"

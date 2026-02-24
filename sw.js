@@ -1,6 +1,6 @@
 // Service Worker for 我的书架 PWA
-const CACHE_NAME = 'novel-site-v2';
-const APP_SHELL = ['/', '/index.html', '/book.html', '/read.html', '/style.css', '/manifest.json', '/icon.svg'];
+const CACHE_NAME = 'novel-site-v3';
+const APP_SHELL = ['/', '/index', '/book', '/read', '/style.css', '/manifest.json', '/icon.svg'];
 
 // Install: cache app shell
 self.addEventListener('install', (e) => {
@@ -64,7 +64,7 @@ self.addEventListener('fetch', (e) => {
     caches.match(e.request).then(cached => {
       if (cached) return cached;
       return fetch(e.request).then(res => {
-        if (res.ok && (url.pathname.endsWith('.html') || url.pathname.endsWith('.css') || url.pathname.endsWith('.js') || url.pathname === '/')) {
+        if (res.ok && (url.pathname.endsWith('.css') || url.pathname.endsWith('.js') || url.pathname === '/' || url.pathname === '/index' || url.pathname === '/book' || url.pathname === '/read')) {
           const clone = res.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
         }
