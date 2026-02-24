@@ -1,5 +1,5 @@
 // GET /api/books/:id — 获取书籍详情 + 章节目录 + 标签
-import { validateId } from '../_utils.js';
+import { validateId, ensureSchemaReady } from '../_utils.js';
 
 export async function onRequestGet(context) {
   const { env, params } = context;
@@ -8,9 +8,10 @@ export async function onRequestGet(context) {
   if (!validateId(id)) {
     return Response.json({ error: 'Invalid book ID' }, { status: 400 });
   }
+  await ensureSchemaReady(env);
 
   const book = await env.DB.prepare(
-    'SELECT id, title, author, description, cover_key, created_at, updated_at FROM books WHERE id = ?'
+    'SELECT id, title, author, description, cover_key, source_name, source_type, source_size, source_uploaded_at, created_at, updated_at FROM books WHERE id = ?'
   ).bind(id).first();
 
   if (!book) {

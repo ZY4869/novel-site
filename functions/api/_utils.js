@@ -76,6 +76,22 @@ async function ensureSchema(env) {
   try {
     await env.DB.prepare('ALTER TABLE books ADD COLUMN cover_key TEXT DEFAULT NULL').run();
   } catch {}
+  // 书籍源文件（不拆解保留）
+  try {
+    await env.DB.prepare('ALTER TABLE books ADD COLUMN source_key TEXT DEFAULT NULL').run();
+  } catch {}
+  try {
+    await env.DB.prepare('ALTER TABLE books ADD COLUMN source_name TEXT DEFAULT NULL').run();
+  } catch {}
+  try {
+    await env.DB.prepare('ALTER TABLE books ADD COLUMN source_type TEXT DEFAULT NULL').run();
+  } catch {}
+  try {
+    await env.DB.prepare('ALTER TABLE books ADD COLUMN source_size INTEGER DEFAULT NULL').run();
+  } catch {}
+  try {
+    await env.DB.prepare('ALTER TABLE books ADD COLUMN source_uploaded_at TEXT DEFAULT NULL').run();
+  } catch {}
   // 标签系统
   try {
     await env.DB.prepare('CREATE TABLE IF NOT EXISTS tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, color TEXT DEFAULT \'#888\')').run();
@@ -95,6 +111,50 @@ async function ensureSchema(env) {
   } catch {}
   try {
     await env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_users_github_id ON admin_users(github_id) WHERE github_id IS NOT NULL').run();
+  } catch {}
+  // 漫画（CBZ）
+  try {
+    await env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS comics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        cover_key TEXT DEFAULT NULL,
+        source_key TEXT DEFAULT NULL,
+        source_name TEXT DEFAULT NULL,
+        source_type TEXT DEFAULT NULL,
+        source_size INTEGER DEFAULT NULL,
+        source_uploaded_at TEXT DEFAULT NULL,
+        page_count INTEGER DEFAULT 0,
+        created_by INTEGER DEFAULT NULL,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      )
+    `).run();
+  } catch {}
+  try {
+    await env.DB.prepare(`
+      CREATE TABLE IF NOT EXISTS comic_pages (
+        comic_id INTEGER NOT NULL,
+        page_index INTEGER NOT NULL,
+        image_key TEXT NOT NULL,
+        width INTEGER DEFAULT NULL,
+        height INTEGER DEFAULT NULL,
+        size_bytes INTEGER DEFAULT NULL,
+        content_type TEXT DEFAULT NULL,
+        created_at TEXT DEFAULT (datetime('now')),
+        PRIMARY KEY (comic_id, page_index)
+      )
+    `).run();
+  } catch {}
+  try {
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_comics_updated_at ON comics(updated_at)').run();
+  } catch {}
+  try {
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_comics_created_by ON comics(created_by)').run();
+  } catch {}
+  try {
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_comic_pages_comic_page ON comic_pages(comic_id, page_index)').run();
   } catch {}
 }
 
@@ -146,11 +206,17 @@ export async function checkAdmin(request, env) {
   if (Math.random() < 0.1) {
     await env.DB.prepare("DELETE FROM admin_sessions WHERE expires_at < datetime('now')").run().catch(() => {});
     await env.DB.prepare("DELETE FROM auth_attempts WHERE last_attempt < datetime('now', '-1 day')").run().catch(() => {});
+    await env.DB.prepare("DELETE FROM site_settings WHERE key LIKE 'oauth_state:%' AND value < datetime('now')").run().catch(() => {});
   }
 
     // 兼容旧角色：editor → admin
   const role = session.role === 'editor' ? 'admin' : (session.role || 'demo');
   return { ok: true, userId: session.user_id, username: session.username, role, passwordLocked: session.password_locked === 1 };
+}
+
+// 公开API/无需登录的接口也可调用，保证新表结构存在
+export async function ensureSchemaReady(env) {
+  await ensureSchema(env);
 }
 
 // ===== 登录 =====
@@ -199,7 +265,7 @@ export async function login(env, username, password, ip) {
 
   // 限制单用户最多10个活跃session，删除最旧的
   await env.DB.prepare(
-    "DELETE FROM admin_sessions WHERE user_id = ? AND id NOT IN (SELECT id FROM admin_sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 10)"
+    "DELETE FROM admin_sessions WHERE user_id = ? AND token NOT IN (SELECT token FROM admin_sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 10)"
   ).bind(user.id, user.id).run().catch(() => {});
 
   await env.DB.prepare("DELETE FROM admin_sessions WHERE expires_at < datetime('now')").run().catch(() => {});
@@ -301,8 +367,23 @@ export async function checkBookOwnership(auth, env, bookId) {
   return book.created_by === auth.userId;
 }
 
+// demo角色的漫画所有权检查：返回true表示允许操作
+export async function checkComicOwnership(auth, env, comicId) {
+  // admin及以上不受限
+  if (requireMinRole(auth, 'admin')) return true;
+  const comic = await env.DB.prepare('SELECT created_by FROM comics WHERE id = ?').bind(comicId).first();
+  if (!comic) return false;
+  return comic.created_by === auth.userId;
+}
+
 export async function parseJsonBody(request) {
   try { return await request.json(); } catch { return null; }
+}
+
+export function sanitizeFilename(name, maxLen = 120) {
+  const raw = String(name || '').trim();
+  const safe = raw.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/_+/g, '_').slice(0, maxLen);
+  return safe || 'file';
 }
 
 // ===== GitHub OAuth 工具 =====
@@ -332,7 +413,7 @@ export async function createSession(env, userId) {
     .bind(tokenHash, userId, expiresAt).run();
   // 限制单用户最多10个活跃session
   await env.DB.prepare(
-    "DELETE FROM admin_sessions WHERE user_id = ? AND id NOT IN (SELECT id FROM admin_sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 10)"
+    "DELETE FROM admin_sessions WHERE user_id = ? AND token NOT IN (SELECT token FROM admin_sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 10)"
   ).bind(userId, userId).run().catch(() => {});
   return { token, expiresAt };
 }

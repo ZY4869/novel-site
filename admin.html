@@ -81,6 +81,53 @@
         <div id="hot-books" style="margin-top:16px"></div>
       </div>
 
+      <!-- 存储空间 -->
+      <div class="admin-section" id="storage-panel">
+        <h3>🧮 存储空间</h3>
+        <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end">
+          <div>
+            <div style="font-size:12px;color:var(--text-light)">已用</div>
+            <div style="font-size:20px;font-weight:700" id="storage-used">-</div>
+          </div>
+          <div>
+            <div style="font-size:12px;color:var(--text-light)">对象数</div>
+            <div style="font-size:20px;font-weight:700" id="storage-objects">-</div>
+          </div>
+          <div>
+            <div style="font-size:12px;color:var(--text-light)">剩余</div>
+            <div style="font-size:20px;font-weight:700" id="storage-remaining">-</div>
+          </div>
+        </div>
+        <div id="storage-breakdown" style="margin-top:10px;font-size:13px;color:var(--text-light)"></div>
+
+        <div class="super-admin-only" style="display:none;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+            <div>
+              <label style="font-size:12px;color:var(--text-light)">配额上限（GB，可空）</label>
+              <input type="number" id="storage-limit-gb" min="0" step="0.1" placeholder="例如 10" style="width:160px">
+            </div>
+            <button class="btn btn-sm" onclick="saveStorageLimit()">保存配额</button>
+            <button class="btn btn-sm btn-danger" onclick="clearStorageLimit()">清除</button>
+          </div>
+          <div id="storage-limit-msg" style="margin-top:8px"></div>
+        </div>
+
+        <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+            <div style="flex:1;min-width:220px">
+              <label style="font-size:12px;color:var(--text-light)">对象前缀过滤（可选）</label>
+              <input type="text" id="storage-prefix" placeholder="例如 sources/books/1/" maxlength="200">
+            </div>
+            <button class="btn btn-sm" onclick="loadStorageObjects(true)">刷新明细</button>
+          </div>
+          <ul class="admin-list" id="storage-objects-list" style="margin-top:10px"></ul>
+          <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+            <button class="btn btn-sm" id="storage-load-more" style="display:none" onclick="loadStorageObjects(false)">加载更多</button>
+            <span id="storage-objects-msg" style="font-size:12px;color:var(--text-light)"></span>
+          </div>
+        </div>
+      </div>
+
       <!-- 账号管理 -->
       <div class="admin-section">
         <h3>👤 账号管理</h3>
@@ -162,8 +209,36 @@
       <div class="admin-section">
         <h3>📥 TXT 导入</h3>
         <div class="form-group">
-          <label>选择目标书籍 *（或先创建新书）</label>
+          <label>导入方式</label>
+          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:4px;font-size:14px;cursor:pointer">
+              <input type="radio" name="txt-import-mode" value="existing" checked> 导入到已有书籍
+            </label>
+            <label style="display:flex;align-items:center;gap:4px;font-size:14px;cursor:pointer">
+              <input type="radio" name="txt-import-mode" value="new"> 创建新书并导入
+            </label>
+          </div>
+          <div style="font-size:12px;color:var(--text-light);margin-top:6px">导入会保留源 TXT 文件（不拆解），后续可下载。</div>
+        </div>
+        <div id="txt-existing-book" class="form-group">
+          <label>选择目标书籍 *</label>
           <select id="import-book"><option value="">加载中...</option></select>
+        </div>
+        <div id="txt-new-book" style="display:none">
+          <div style="padding:12px;background:var(--bg);border-radius:var(--radius);margin-bottom:12px">
+            <div class="form-group" style="margin-bottom:8px">
+              <label>书名</label>
+              <input type="text" id="txt-book-title" placeholder="书名" maxlength="200">
+            </div>
+            <div class="form-group" style="margin-bottom:8px">
+              <label>作者</label>
+              <input type="text" id="txt-book-author" placeholder="作者" maxlength="100">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>简介</label>
+              <textarea id="txt-book-desc" placeholder="简介" style="min-height:60px" maxlength="2000"></textarea>
+            </div>
+          </div>
         </div>
         <div class="form-group">
           <label>选择 TXT 文件（支持 UTF-8 / GBK 编码，最大 50MB）</label>
@@ -269,10 +344,74 @@
         <div id="book-msg"></div>
       </div>
 
+      <!-- 源文件收纳（任意格式） -->
+      <div class="admin-section">
+        <h3>📦 源文件收纳（任意格式）</h3>
+        <div class="form-group">
+          <label>选择文件（最大 200MB，将保留源格式）</label>
+          <input type="file" id="source-file" style="padding:8px 0">
+        </div>
+        <div class="form-group">
+          <label>书名 *</label>
+          <input type="text" id="source-book-title" placeholder="默认取文件名" maxlength="200">
+        </div>
+        <div class="form-group">
+          <label>作者</label>
+          <input type="text" id="source-book-author" placeholder="可选" maxlength="100">
+        </div>
+        <div class="form-group">
+          <label>简介</label>
+          <textarea id="source-book-desc" placeholder="可选" style="min-height:60px" maxlength="2000"></textarea>
+        </div>
+        <button class="btn" onclick="createBookFromSource()">创建并上传源文件</button>
+        <div id="source-book-msg"></div>
+      </div>
+
       <!-- 书籍管理 -->
       <div class="admin-section">
         <h3>📚 书籍管理</h3>
         <ul class="admin-list" id="book-list"><li class="loading">加载中...</li></ul>
+      </div>
+
+      <!-- 漫画管理 -->
+      <div class="admin-section">
+        <h3>🖼️ 漫画（CBZ）</h3>
+        <div class="form-group">
+          <label>选择 CBZ 文件（最大 200MB，仅图片压缩包）</label>
+          <input type="file" id="cbz-file" accept=".cbz,.zip" style="padding:8px 0">
+        </div>
+        <div id="cbz-parsing-msg" style="display:none;padding:12px;background:var(--bg);border-radius:var(--radius);color:var(--text-light);font-size:14px">
+          ⏳ 正在解析 CBZ 文件...
+        </div>
+        <div id="cbz-preview" style="display:none">
+          <div style="padding:12px;background:var(--bg);border-radius:var(--radius);margin-bottom:12px">
+            <div class="form-group" style="margin-bottom:8px">
+              <label>标题</label>
+              <input type="text" id="cbz-title" placeholder="漫画标题" maxlength="200">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>简介</label>
+              <textarea id="cbz-desc" placeholder="可选" style="min-height:60px" maxlength="2000"></textarea>
+            </div>
+            <div style="font-size:12px;color:var(--text-light);margin-top:8px" id="cbz-summary"></div>
+          </div>
+          <div class="import-progress" id="cbz-progress" style="display:none">
+            <div style="background:var(--bg-secondary,var(--border));border-radius:10px;overflow:hidden;height:20px;margin:12px 0">
+              <div id="cbz-bar" style="height:100%;background:var(--primary,var(--accent));border-radius:10px;transition:width 0.3s;width:0%"></div>
+            </div>
+            <div id="cbz-status" style="font-size:13px;color:var(--text-light)"></div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn" onclick="startCbzImport()">开始导入漫画</button>
+            <button class="btn btn-sm" onclick="cancelCbzImport()">取消</button>
+          </div>
+        </div>
+        <div id="cbz-msg"></div>
+
+        <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
+          <h4 style="margin:0 0 10px">已导入漫画</h4>
+          <ul class="admin-list" id="comic-list"><li style="color:var(--text-light)">加载中...</li></ul>
+        </div>
       </div>
 
       <!-- 标签管理 -->
@@ -463,6 +602,14 @@
     let currentUserId = Number(sessionStorage.getItem('auth_uid')) || 0;
     let currentPasswordLocked = false;
 
+    // ===== 上传/导入状态缓存 =====
+    let txtImportFile = null;
+    let epubImportFile = null;
+    let cbzImportFile = null;
+    let cbzZip = null;
+    let cbzImageNames = [];
+    let _storageCursor = null;
+
     function getToken() { return authToken; }
 
     // ===== GitHub OAuth =====
@@ -546,7 +693,7 @@
       // demo限制：隐藏EPUB导入和删除书籍
       const demoHideEls = document.querySelectorAll('.hide-for-demo');
       demoHideEls.forEach(el => el.style.display = role === 'demo' ? 'none' : '');
-      refreshAllBooks(); loadSettings(); loadStats(); loadFontList();
+      refreshAllBooks(); loadSettings(); loadStats(); loadFontList(); loadComicList(); loadStorageSummary(); loadStorageObjects(true);
       if (role === 'super_admin') { loadAdminUsers(); loadGitHubConfig(); }
     }
 
@@ -663,6 +810,22 @@
     const CHAPTER_REGEX = /^[^\S\n\r]*(?:(?:正文|上卷|下卷|[上中下]册|卷[零〇一二三四五六七八九十百千\d]+)\s+)?(?:[【\[「]?第[零〇一二三四五六七八九十百千万壹贰叁肆伍陆柒捌玖拾佰仟\d]+[章节回卷集部篇幕话][】\]」]?(?=[\s:：\-—,，.。!！?？、）)\]】」}\d~～·]|$)|(?:chapter|CHAPTER|Chapter)\s+\d+|Part\s+(?:\d+|[IVXLCDM]+|[ivxlcdm]+)|[上中下]篇(?=[\s:：\-—]|$)|(?:序[章言幕]|楔子|尾声|番外(?:[篇：: \d一二三四五六七八九十]*)|后记|前言|引[子言]|附录|终章|大结局)(?=[\s:：\-—]|$)(?![\u4e00-\u9fff]))[^\S\n\r]*[:：\-—~～·|｜]*[^\S\n\r]*[^\n\r]{0,100}$/gm;
     let parsedChapters = [];
 
+    function toggleTxtImportMode() {
+      const mode = document.querySelector('input[name="txt-import-mode"]:checked')?.value || 'existing';
+      document.getElementById('txt-existing-book').style.display = mode === 'existing' ? '' : 'none';
+      document.getElementById('txt-new-book').style.display = mode === 'new' ? '' : 'none';
+      if (mode === 'new') {
+        const titleEl = document.getElementById('txt-book-title');
+        if (titleEl && !titleEl.value.trim() && txtImportFile) {
+          titleEl.value = filenameToTitle(txtImportFile.name);
+        }
+      }
+    }
+    document.querySelectorAll('input[name="txt-import-mode"]').forEach(radio => {
+      radio.addEventListener('change', toggleTxtImportMode);
+    });
+    toggleTxtImportMode();
+
     function decodeText(buffer) {
       const bytes = new Uint8Array(buffer);
       if (bytes[0]===0xEF&&bytes[1]===0xBB&&bytes[2]===0xBF) return new TextDecoder('utf-8').decode(buffer);
@@ -724,7 +887,8 @@
     }
     document.getElementById('import-file').addEventListener('change',async function(){
       const file=this.files[0]; if(!file) return;
-      if (file.size>50*1024*1024) return showMsg('import-msg','文件超过50MB限制','error');
+      if (file.size>50*1024*1024) { txtImportFile = null; this.value=''; return showMsg('import-msg','文件超过50MB限制','error'); }
+      txtImportFile = file;
       showMsg('import-msg','正在解析文件...','');
       try {
         const buffer=await file.arrayBuffer();
@@ -738,6 +902,7 @@
           }
         }
         renderImportPreview();
+        toggleTxtImportMode();
         showMsg('import-msg','','');
       } catch(e) { showMsg('import-msg','文件解析失败：'+e.message,'error'); }
     });
@@ -771,18 +936,52 @@
     }
     function cancelImport() {
       parsedChapters=[];
+      txtImportFile = null;
       document.getElementById('import-preview').style.display='none';
       document.getElementById('import-file').value='';
       document.querySelector('.import-progress').style.display='none';
     }
     async function startImport() {
-      const bookId=document.getElementById('import-book').value;
-      if (!bookId) return showMsg('import-msg','请选择目标书籍','error');
+      const mode = document.querySelector('input[name="txt-import-mode"]:checked')?.value || 'existing';
+      const isNewBook = mode === 'new';
+      let bookId;
+      if (mode === 'new') {
+        const title = document.getElementById('txt-book-title').value.trim();
+        if (!title) return showMsg('import-msg','请输入书名','error');
+        const author = document.getElementById('txt-book-author').value.trim();
+        const description = document.getElementById('txt-book-desc').value.trim();
+        try {
+          const res = await api('POST', '/api/admin/books', { title, author, description });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error);
+          bookId = data.book.id;
+        } catch (e) {
+          return showMsg('import-msg', '创建书籍失败：' + e.message, 'error');
+        }
+      } else {
+        bookId = document.getElementById('import-book').value;
+        if (!bookId) return showMsg('import-msg','请选择目标书籍','error');
+        bookId = Number(bookId);
+      }
+
+      if (!txtImportFile) return showMsg('import-msg','请先选择 TXT 文件','error');
       const chapters=parsedChapters.filter(c=>c.checked);
       if (chapters.length===0) return showMsg('import-msg','没有选中任何章节','error');
       const bar=document.getElementById('import-bar');
       const status=document.getElementById('import-status');
       document.querySelector('.import-progress').style.display='block';
+      bar.style.width='0%';
+      status.textContent='上传源文件...';
+      try {
+        await uploadBookSource(bookId, txtImportFile);
+      } catch(e) {
+        let note = '';
+        if (isNewBook) {
+          try { await api('DELETE', `/api/admin/books/${bookId}`); note = '（已回滚创建的书籍）'; }
+          catch { note = '（回滚失败，请在书籍列表手动删除刚创建的空书）'; }
+        }
+        return showMsg('import-msg','源文件上传失败：'+e.message+note,'error');
+      }
       let uploaded=0,errors=[];
       const tasks = chapters.map(ch => () =>
         api('POST','/api/admin/chapters',{book_id:Number(bookId),title:ch.title,content:ch.content})
@@ -879,13 +1078,17 @@
         el.innerHTML=data.books.map(b=>{
           const isOwner = currentRole !== 'demo' || b.created_by === currentUserId;
           const canDelete = currentRole !== 'demo' || b.created_by === currentUserId;
+          const hasSource = !!b.has_source;
+          const downloadOnly = (b.chapter_count || 0) === 0 && hasSource;
+          const sourceInfo = hasSource ? ` · 源文件 ${formatBytes(b.source_size || 0)}` : '';
           return `
           <li data-id="${b.id}">
             <div class="item-info">
-              <div class="item-title">${esc(b.title)}${currentRole === 'demo' && !isOwner ? ' <span style="font-size:11px;color:var(--text-light)">(他人)</span>' : ''}</div>
-              <div class="item-meta">${b.author?esc(b.author)+' · ':''}${b.chapter_count} 章 · ${b.total_words} 字</div>
+              <div class="item-title">${esc(b.title)}${downloadOnly ? ' <span style="font-size:11px;color:var(--text-light)">(仅可下载)</span>' : ''}${currentRole === 'demo' && !isOwner ? ' <span style="font-size:11px;color:var(--text-light)">(他人)</span>' : ''}</div>
+              <div class="item-meta">${b.author?esc(b.author)+' · ':''}${b.chapter_count} 章 · ${b.total_words} 字${sourceInfo}</div>
             </div>
             <div class="item-actions">
+              ${hasSource ? `<a class="btn btn-sm" href="/api/books/${b.id}/source" target="_blank" rel="noopener">下载</a>` : ''}
               ${isOwner ? '<button class="btn btn-sm btn-edit-book">编辑</button>' : ''}
               ${canDelete ? '<button class="btn btn-sm btn-danger btn-delete-book">删除</button>' : ''}
             </div>
@@ -948,6 +1151,52 @@
         refreshAllBooks();
       } catch(e) { showMsg('book-msg',e.message,'error'); }
     }
+
+    // 源文件收纳（任意格式）
+    document.getElementById('source-file').addEventListener('change', function() {
+      const file = this.files[0];
+      if (!file) return;
+      const titleEl = document.getElementById('source-book-title');
+      if (titleEl && !titleEl.value.trim()) titleEl.value = filenameToTitle(file.name);
+    });
+
+    async function createBookFromSource() {
+      const fileInput = document.getElementById('source-file');
+      const file = fileInput?.files?.[0];
+      if (!file) return showMsg('source-book-msg', '请选择文件', 'error');
+      if (file.size > 200 * 1024 * 1024) return showMsg('source-book-msg', '文件超过 200MB 限制', 'error');
+
+      const title = (document.getElementById('source-book-title').value.trim() || filenameToTitle(file.name)).slice(0, 200);
+      const author = document.getElementById('source-book-author').value.trim().slice(0, 100);
+      const description = document.getElementById('source-book-desc').value.trim().slice(0, 2000);
+      if (!title) return showMsg('source-book-msg', '请输入书名', 'error');
+
+      showMsg('source-book-msg', '创建中...', '');
+      let createdBookId = null;
+      try {
+        const res = await api('POST', '/api/admin/books', { title, author, description });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        createdBookId = data.book.id;
+
+        showMsg('source-book-msg', '上传源文件中...', '');
+        await uploadBookSource(createdBookId, file);
+
+        showMsg('source-book-msg', `创建成功：${esc(title)}`, 'success');
+        fileInput.value = '';
+        document.getElementById('source-book-title').value = '';
+        document.getElementById('source-book-author').value = '';
+        document.getElementById('source-book-desc').value = '';
+        refreshAllBooks();
+      } catch (e) {
+        let note = '';
+        if (createdBookId) {
+          try { await api('DELETE', `/api/admin/books/${createdBookId}`); note = '（已回滚创建的书籍）'; }
+          catch { note = '（回滚失败，请在书籍列表手动删除刚创建的空书）'; }
+        }
+        showMsg('source-book-msg', (e.message || '失败') + note, 'error');
+      }
+    }
     function editBook(id,title,author,desc) {
       const newTitle=prompt('书名：',title);
       if (newTitle===null) return;
@@ -965,6 +1214,195 @@
         if (!res.ok) throw new Error(data.error);
         refreshAllBooks(); loadChapters();
       } catch(e) { alert('删除失败：'+e.message); }
+    }
+
+    // ===== 漫画（CBZ） =====
+    function isSupportedImage(name) {
+      return /\.(jpe?g|png|webp|gif|avif|bmp)$/i.test(name || '');
+    }
+    function guessImageMime(name) {
+      const ext = String(name || '').split('.').pop().toLowerCase();
+      if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+      if (ext === 'png') return 'image/png';
+      if (ext === 'webp') return 'image/webp';
+      if (ext === 'gif') return 'image/gif';
+      if (ext === 'avif') return 'image/avif';
+      if (ext === 'bmp') return 'image/bmp';
+      return 'application/octet-stream';
+    }
+
+    async function loadComicList() {
+      const el = document.getElementById('comic-list');
+      if (!el) return;
+      try {
+        const res = await api('GET', '/api/admin/comics');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        const comics = data.comics || [];
+        if (comics.length === 0) {
+          el.innerHTML = '<li style="padding:12px 0;color:var(--text-light)">暂无漫画</li>';
+          return;
+        }
+        el.innerHTML = comics.map(c => `
+          <li data-id="${c.id}">
+            <div class="item-info">
+              <div class="item-title">${esc(c.title || '')}</div>
+              <div class="item-meta">${(c.page_count || 0)} 页${c.source_size ? ' · 源文件 ' + formatBytes(c.source_size) : ''}${c.updated_at ? ' · ' + esc(String(c.updated_at).slice(0,10)) : ''}</div>
+            </div>
+            <div class="item-actions">
+              <a class="btn btn-sm" href="/comic-read.html?id=${c.id}" target="_blank" rel="noopener">阅读</a>
+              <button class="btn btn-sm btn-danger btn-delete-comic">删除</button>
+            </div>
+          </li>
+        `).join('');
+      } catch (e) {
+        el.innerHTML = `<li class="msg msg-error">${esc(e.message)}</li>`;
+      }
+    }
+
+    document.getElementById('comic-list').addEventListener('click', async function(e) {
+      if (!e.target.classList.contains('btn-delete-comic')) return;
+      const li = e.target.closest('li[data-id]');
+      if (!li) return;
+      const id = Number(li.dataset.id);
+      if (!confirm('确定删除该漫画及其所有页面？此操作不可恢复！')) return;
+      try {
+        const res = await api('DELETE', `/api/admin/comics/${id}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        loadComicList();
+      } catch (err) {
+        alert('删除失败：' + err.message);
+      }
+    });
+
+    document.getElementById('cbz-file').addEventListener('change', async function() {
+      const file = this.files[0];
+      if (!file) return;
+      if (file.size > 200 * 1024 * 1024) { cbzImportFile = null; this.value=''; return showMsg('cbz-msg', '文件超过 200MB 限制', 'error'); }
+      if (!/\.(cbz|zip)$/i.test(file.name || '')) { cbzImportFile = null; this.value=''; return showMsg('cbz-msg', '请选择 .cbz 文件', 'error'); }
+
+      cbzImportFile = file;
+      cbzZip = null;
+      cbzImageNames = [];
+      document.getElementById('cbz-preview').style.display = 'none';
+      document.getElementById('cbz-parsing-msg').style.display = '';
+      document.getElementById('cbz-progress').style.display = 'none';
+      showMsg('cbz-msg', '', '');
+
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const zip = await JSZip.loadAsync(arrayBuffer);
+        const names = [];
+        zip.forEach((relativePath, entry) => {
+          if (entry.dir) return;
+          if (relativePath.startsWith('__MACOSX/')) return;
+          if (!isSupportedImage(relativePath)) return;
+          names.push(relativePath);
+        });
+        names.sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+        if (names.length === 0) throw new Error('未找到图片文件（仅支持 jpg/png/webp/gif/avif/bmp）');
+        if (names.length > 2000) throw new Error('页数过多（超过 2000 页），请拆分导入');
+
+        cbzZip = zip;
+        cbzImageNames = names;
+
+        const titleEl = document.getElementById('cbz-title');
+        if (titleEl && !titleEl.value.trim()) titleEl.value = filenameToTitle(file.name);
+
+        document.getElementById('cbz-summary').textContent =
+          `检测到 ${names.length} 张图片：${names.slice(0, 6).join(', ')}${names.length > 6 ? ' ...' : ''}`;
+
+        document.getElementById('cbz-parsing-msg').style.display = 'none';
+        document.getElementById('cbz-preview').style.display = '';
+      } catch (e) {
+        document.getElementById('cbz-parsing-msg').style.display = 'none';
+        cbzImportFile = null; cbzZip = null; cbzImageNames = [];
+        showMsg('cbz-msg', '解析失败：' + e.message, 'error');
+      }
+    });
+
+    function cancelCbzImport(clearMsg = true) {
+      cbzImportFile = null;
+      cbzZip = null;
+      cbzImageNames = [];
+      document.getElementById('cbz-preview').style.display = 'none';
+      document.getElementById('cbz-parsing-msg').style.display = 'none';
+      document.getElementById('cbz-progress').style.display = 'none';
+      document.getElementById('cbz-file').value = '';
+      document.getElementById('cbz-bar').style.width = '0%';
+      document.getElementById('cbz-status').textContent = '';
+      if (clearMsg) showMsg('cbz-msg', '', '');
+    }
+
+    async function startCbzImport() {
+      if (!cbzImportFile || !cbzZip || cbzImageNames.length === 0) {
+        return showMsg('cbz-msg', '请先选择 CBZ 文件', 'error');
+      }
+      const title = document.getElementById('cbz-title').value.trim();
+      if (!title) return showMsg('cbz-msg', '请输入标题', 'error');
+      const description = document.getElementById('cbz-desc').value.trim();
+
+      let comicId;
+      showMsg('cbz-msg', '创建漫画中...', '');
+      try {
+        const res = await api('POST', '/api/admin/comics', { title, description });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        comicId = data.comic.id;
+      } catch (e) {
+        return showMsg('cbz-msg', '创建失败：' + e.message, 'error');
+      }
+
+      const bar = document.getElementById('cbz-bar');
+      const status = document.getElementById('cbz-status');
+      document.getElementById('cbz-progress').style.display = '';
+      bar.style.width = '0%';
+      status.textContent = '上传源文件...';
+
+      try {
+        await uploadComicSource(comicId, cbzImportFile);
+      } catch (e) {
+        try { await api('DELETE', `/api/admin/comics/${comicId}`); } catch {}
+        return showMsg('cbz-msg', '源文件上传失败：' + e.message, 'error');
+      }
+
+      let done = 0;
+      let errors = [];
+      let totalExtracted = 0;
+      const MAX_EXTRACTED = 1024 * 1024 * 1024; // 1GB
+
+      const tasks = cbzImageNames.map((name, idx) => async () => {
+        try {
+          const entry = cbzZip.file(name);
+          if (!entry) throw new Error('找不到文件');
+          const ab = await entry.async('arraybuffer');
+          totalExtracted += ab.byteLength;
+          if (totalExtracted > MAX_EXTRACTED) throw new Error('解压内容过大（超过 1GB），可能是异常文件');
+          if (ab.byteLength > 20 * 1024 * 1024) throw new Error('单页图片超过 20MB 限制');
+
+          const blob = new Blob([ab], { type: guessImageMime(name) });
+          await uploadComicPage(comicId, idx + 1, blob, name);
+        } catch (err) {
+          errors.push(`${idx + 1}: ${name} - ${err.message}`);
+        } finally {
+          done++;
+          const pct = Math.round(done / cbzImageNames.length * 100);
+          bar.style.width = pct + '%';
+          status.textContent = `${done}/${cbzImageNames.length} 页（${pct}%）`;
+        }
+      });
+
+      await concurrentUpload(tasks, 2);
+      try { await api('POST', `/api/admin/comics/${comicId}/finalize`, {}); } catch {}
+
+      if (errors.length > 0) {
+        showMsg('cbz-msg', `导入完成，${errors.length} 页失败：${errors.slice(0, 3).join('；')}`, 'error');
+      } else {
+        showMsg('cbz-msg', `导入完成：${cbzImageNames.length} 页`, 'success');
+      }
+      cancelCbzImport(false);
+      loadComicList();
     }
 
     // ===== 章节 =====
@@ -1094,6 +1532,68 @@
       if (body) opts.body=JSON.stringify(body);
       return fetch(url,opts);
     }
+    function authHeaders(extra = {}) {
+      return Object.assign({ 'Authorization': `Bearer ${getToken()}` }, extra);
+    }
+    function formatBytes(bytes) {
+      const n = Number(bytes || 0);
+      if (!Number.isFinite(n) || n <= 0) return '0 B';
+      const units = ['B','KB','MB','GB','TB'];
+      let v = n, i = 0;
+      while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+      return (i === 0 ? v.toFixed(0) : v.toFixed(v >= 10 ? 1 : 2)) + ' ' + units[i];
+    }
+    function filenameToTitle(name) {
+      const s = String(name || '').trim();
+      return s.replace(/\.[a-zA-Z0-9]{1,6}$/, '').slice(0, 200) || '未命名';
+    }
+    async function uploadBookSource(bookId, file) {
+      if (!file) throw new Error('未选择源文件');
+      const res = await fetch(`/api/admin/books/${bookId}/source`, {
+        method: 'PUT',
+        headers: authHeaders({
+          'X-File-Name': file.name || 'file',
+          'X-File-Size': String(file.size || 0),
+          'Content-Type': file.type || 'application/octet-stream',
+        }),
+        body: file
+      });
+      let data = {};
+      try { data = await res.json(); } catch {}
+      if (!res.ok) throw new Error(data.error || '源文件上传失败');
+      return data;
+    }
+    async function uploadComicSource(comicId, file) {
+      if (!file) throw new Error('未选择漫画源文件');
+      const res = await fetch(`/api/admin/comics/${comicId}/source`, {
+        method: 'PUT',
+        headers: authHeaders({
+          'X-File-Name': file.name || 'comic.cbz',
+          'X-File-Size': String(file.size || 0),
+          'Content-Type': file.type || 'application/zip',
+        }),
+        body: file
+      });
+      let data = {};
+      try { data = await res.json(); } catch {}
+      if (!res.ok) throw new Error(data.error || '漫画源文件上传失败');
+      return data;
+    }
+    async function uploadComicPage(comicId, pageIndex, blob, origName) {
+      const res = await fetch(`/api/admin/comics/${comicId}/pages/${pageIndex}`, {
+        method: 'PUT',
+        headers: authHeaders({
+          'X-File-Size': String(blob.size || 0),
+          'X-Orig-Name': origName || '',
+          'Content-Type': blob.type || 'application/octet-stream',
+        }),
+        body: blob
+      });
+      let data = {};
+      try { data = await res.json(); } catch {}
+      if (!res.ok) throw new Error(data.error || `第 ${pageIndex} 页上传失败`);
+      return data;
+    }
 
     // 并发上传控制器
     async function concurrentUpload(tasks, concurrency = 3) {
@@ -1154,6 +1654,119 @@
           el.innerHTML = '';
         }
       } catch {}
+    }
+
+    // ===== 存储空间 =====
+    async function loadStorageSummary() {
+      try {
+        const res = await api('GET', '/api/admin/storage/summary');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        const s = data.summary || {};
+
+        document.getElementById('storage-used').textContent = formatBytes(s.usedBytes || 0);
+        document.getElementById('storage-objects').textContent = (s.objectsCount || 0).toLocaleString();
+        document.getElementById('storage-remaining').textContent = (s.remainingBytes === null || s.remainingBytes === undefined)
+          ? '未配置'
+          : formatBytes(s.remainingBytes);
+
+        const bc = s.byCategory || {};
+        const lines = [
+          `sources：${formatBytes(bc.sources || 0)}`,
+          `novels：${formatBytes(bc.novels || 0)}`,
+          `comics：${formatBytes(bc.comics || 0)}`,
+          `covers：${formatBytes(bc.covers || 0)}`,
+          `fonts：${formatBytes(bc.fonts || 0)}`,
+          `derived：${formatBytes(bc.derived || 0)}`,
+          `other：${formatBytes(bc.other || 0)}`,
+        ];
+        document.getElementById('storage-breakdown').textContent = lines.join(' · ') + (s.computedAt ? `（计算于 ${s.computedAt.slice(0,19).replace('T',' ')}）` : '');
+
+        // 填充配额输入（super_admin可见）
+        const gbInput = document.getElementById('storage-limit-gb');
+        if (gbInput) {
+          if (s.limitBytes) gbInput.value = (Number(s.limitBytes) / (1024 * 1024 * 1024)).toFixed(2).replace(/\.?0+$/,'');
+          else gbInput.value = '';
+        }
+      } catch (e) {
+        document.getElementById('storage-breakdown').textContent = '加载失败：' + e.message;
+      }
+    }
+
+    async function saveStorageLimit() {
+      const input = document.getElementById('storage-limit-gb');
+      const v = (input?.value || '').trim();
+      if (!v) return clearStorageLimit();
+      const gb = Number(v);
+      if (!Number.isFinite(gb) || gb <= 0) return showMsg('storage-limit-msg', '请输入有效的 GB 数值', 'error');
+      const limitBytes = Math.floor(gb * 1024 * 1024 * 1024);
+      try {
+        const res = await api('PUT', '/api/admin/storage/summary', { limitBytes });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        showMsg('storage-limit-msg', '已保存', 'success');
+        loadStorageSummary();
+      } catch (e) {
+        showMsg('storage-limit-msg', e.message, 'error');
+      }
+    }
+
+    async function clearStorageLimit() {
+      try {
+        const res = await api('PUT', '/api/admin/storage/summary', { limitBytes: 0 });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        showMsg('storage-limit-msg', '已清除', 'success');
+        loadStorageSummary();
+      } catch (e) {
+        showMsg('storage-limit-msg', e.message, 'error');
+      }
+    }
+
+    async function loadStorageObjects(reset) {
+      try {
+        const prefix = document.getElementById('storage-prefix')?.value || '';
+        if (reset) {
+          _storageCursor = null;
+          document.getElementById('storage-objects-list').innerHTML = '';
+          document.getElementById('storage-objects-msg').textContent = '';
+        }
+        const url = new URL('/api/admin/storage/objects', location.origin);
+        if (prefix.trim()) url.searchParams.set('prefix', prefix.trim());
+        if (_storageCursor) url.searchParams.set('cursor', _storageCursor);
+        url.searchParams.set('limit', '200');
+
+        const res = await fetch(url.toString(), { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || '加载失败');
+
+        const list = document.getElementById('storage-objects-list');
+        const items = data.objects || [];
+        if (reset && items.length === 0) {
+          list.innerHTML = '<li style="padding:12px 0;color:var(--text-light)">暂无对象</li>';
+        } else {
+          const html = items.map(o => {
+            const owner = o.ownerType && o.ownerId ? `${o.ownerType}#${o.ownerId}` : '';
+            const meta = [o.category, owner, o.kind].filter(Boolean).join(' · ');
+            const time = o.uploaded ? String(o.uploaded).slice(0, 19).replace('T',' ') : '';
+            return `
+              <li>
+                <div class="item-info">
+                  <div class="item-title" style="font-size:13px;word-break:break-all">${esc(o.key)}</div>
+                  <div class="item-meta">${formatBytes(o.size || 0)}${time ? ' · ' + esc(time) : ''}${meta ? ' · ' + esc(meta) : ''}</div>
+                </div>
+              </li>
+            `;
+          }).join('');
+          list.insertAdjacentHTML('beforeend', html);
+        }
+
+        _storageCursor = data.cursor || null;
+        document.getElementById('storage-load-more').style.display = _storageCursor ? '' : 'none';
+        document.getElementById('storage-objects-msg').textContent = _storageCursor ? '已加载一部分，可继续加载更多' : '已加载完毕';
+      } catch (e) {
+        document.getElementById('storage-objects-msg').textContent = '加载失败：' + e.message;
+      }
     }
 
     // ===== 管理员管理 =====
@@ -1453,8 +2066,9 @@
     document.getElementById('epub-file').addEventListener('change', async function() {
       const file = this.files[0];
       if (!file) return;
-      if (file.size > 50 * 1024 * 1024) return showMsg('epub-msg', '文件超过 50MB 限制', 'error');
-      if (!file.name.toLowerCase().endsWith('.epub')) return showMsg('epub-msg', '请选择 .epub 文件', 'error');
+      if (file.size > 50 * 1024 * 1024) { epubImportFile = null; this.value=''; return showMsg('epub-msg', '文件超过 50MB 限制', 'error'); }
+      if (!file.name.toLowerCase().endsWith('.epub')) { epubImportFile = null; this.value=''; return showMsg('epub-msg', '请选择 .epub 文件', 'error'); }
+      epubImportFile = file;
 
       document.getElementById('epub-preview').style.display = 'none';
       document.getElementById('epub-parsing-msg').style.display = '';
@@ -1654,13 +2268,14 @@
       }
     });
 
-    function cancelEpubImport() {
+    function cancelEpubImport(clearMsg = true) {
       epubChapters = [];
+      epubImportFile = null;
       document.getElementById('epub-preview').style.display = 'none';
       document.getElementById('epub-file').value = '';
       document.getElementById('epub-progress').style.display = 'none';
       document.getElementById('epub-parsing-msg').style.display = 'none';
-      showMsg('epub-msg', '', '');
+      if (clearMsg) showMsg('epub-msg', '', '');
     }
 
     // ===== 标签管理 =====
@@ -1865,6 +2480,7 @@
       if (chapters.length === 0) return showMsg('epub-msg', '没有选中任何章节', 'error');
 
       const mode = document.querySelector('input[name="epub-import-mode"]:checked').value;
+      const isNewBook = mode === 'new';
       let bookId;
 
       if (mode === 'new') {
@@ -1886,11 +2502,25 @@
         bookId = Number(bookId);
       }
 
-      // 开始导入章节
       const bar = document.getElementById('epub-bar');
       const status = document.getElementById('epub-status');
       document.getElementById('epub-progress').style.display = '';
       bar.style.width = '0%';
+      status.textContent = '上传源文件...';
+
+      if (!epubImportFile) return showMsg('epub-msg', '请先选择 EPUB 文件', 'error');
+      try {
+        await uploadBookSource(bookId, epubImportFile);
+      } catch (e) {
+        let note = '';
+        if (isNewBook) {
+          try { await api('DELETE', `/api/admin/books/${bookId}`); note = '（已回滚创建的书籍）'; }
+          catch { note = '（回滚失败，请在书籍列表手动删除刚创建的空书）'; }
+        }
+        return showMsg('epub-msg', '源文件上传失败：' + e.message + note, 'error');
+      }
+
+      // 开始导入章节
       let uploaded = 0, errors = [];
 
       const tasks = chapters.map(ch => () =>
@@ -1913,7 +2543,7 @@
       } else {
         showMsg('epub-msg', `成功导入 ${uploaded} 章`, 'success');
       }
-      cancelEpubImport();
+      cancelEpubImport(false);
       refreshAllBooks();
     }
   </script>

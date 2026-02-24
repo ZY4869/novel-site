@@ -17,10 +17,40 @@ export async function onRequest(context) {
     return new Response(null, { status: 204, headers });
   }
 
-  // 请求大小限制（10MB）
-  const contentLength = parseInt(context.request.headers.get('Content-Length') || '0');
-  if (contentLength > 10 * 1024 * 1024) {
-    return Response.json({ error: 'Request too large' }, { status: 413 });
+  // 请求大小限制
+  const DEFAULT_MAX_BYTES = 10 * 1024 * 1024;
+  const SOURCE_MAX_BYTES = 200 * 1024 * 1024;
+  const COMIC_PAGE_MAX_BYTES = 20 * 1024 * 1024;
+
+  const pathname = url.pathname;
+  const method = context.request.method;
+
+  const uploadRule = (() => {
+    if (method !== 'PUT') return null;
+    if (/^\/api\/admin\/books\/\d+\/source$/.test(pathname)) return { maxBytes: SOURCE_MAX_BYTES };
+    if (/^\/api\/admin\/comics\/\d+\/source$/.test(pathname)) return { maxBytes: SOURCE_MAX_BYTES };
+    if (/^\/api\/admin\/comics\/\d+\/pages\/\d+$/.test(pathname)) return { maxBytes: COMIC_PAGE_MAX_BYTES };
+    return null;
+  })();
+
+  if (uploadRule) {
+    // 上传接口强制要求 X-File-Size（避免 Content-Length 不可靠导致绕过）
+    const sizeStr = context.request.headers.get('X-File-Size');
+    if (!sizeStr || !/^\d+$/.test(sizeStr)) {
+      return Response.json({ error: 'Missing or invalid X-File-Size' }, { status: 400 });
+    }
+    const size = Number(sizeStr);
+    if (!Number.isFinite(size) || size <= 0) {
+      return Response.json({ error: 'Invalid X-File-Size' }, { status: 400 });
+    }
+    if (size > uploadRule.maxBytes) {
+      return Response.json({ error: 'Request too large' }, { status: 413 });
+    }
+  } else {
+    const contentLength = parseInt(context.request.headers.get('Content-Length') || '0');
+    if (contentLength > DEFAULT_MAX_BYTES) {
+      return Response.json({ error: 'Request too large' }, { status: 413 });
+    }
   }
 
   try {

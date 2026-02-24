@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>漫画 - 我的书架</title>
+  <meta name="description" content="">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#d4a574">
+</head>
+<body>
+  <div class="navbar">
+    <h1><a href="/">📚 我的书架</a></h1>
+    <nav>
+      <a href="/">书架</a>
+      <a href="/admin.html">管理</a>
+      <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">🌙</button>
+    </nav>
+  </div>
+  <div class="container">
+    <div class="breadcrumb"><a href="/">书架</a><span>›</span><span>漫画</span></div>
+    <div id="content" class="loading">加载中...</div>
+  </div>
+
+  <script>
+    // 主题
+    const THEMES = ['light','dark','green','sepia','blue'];
+    const THEME_ICONS = {'light':'🌙','dark':'☀️','green':'🍃','sepia':'📜','blue':'💧'};
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    updateThemeBtn();
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme');
+      const idx = THEMES.indexOf(current);
+      const next = THEMES[(idx + 1) % THEMES.length];
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('theme', next);
+      updateThemeBtn();
+    }
+    function updateThemeBtn() {
+      const btn = document.querySelector('.theme-toggle');
+      const t = document.documentElement.getAttribute('data-theme');
+      btn.textContent = THEME_ICONS[t] || '🌙';
+    }
+
+    // PWA Service Worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+
+    // 加载站点设置
+    fetch('/api/settings').then(r => r.json()).then(d => {
+      const s = d.settings || {};
+      if (s.site_name) document.querySelector('.navbar h1 a').textContent = '📚 ' + s.site_name;
+      if (s.site_desc) document.querySelector('meta[name="description"]').content = s.site_desc;
+      document.title = (s.site_name ? '漫画 - ' + s.site_name : '漫画 - 我的书架');
+    }).catch(() => {});
+
+    // 封面颜色生成（复用首页逻辑）
+    const COVER_COLORS = ['#e74c3c','#e67e22','#f1c40f','#2ecc71','#1abc9c','#3498db','#9b59b6','#e91e63','#00bcd4','#ff5722'];
+    function coverColor(title) { let h = 0; for (let i = 0; i < (title||'').length; i++) h = ((h << 5) - h + title.charCodeAt(i)) | 0; return COVER_COLORS[Math.abs(h) % COVER_COLORS.length]; }
+
+    function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+    async function loadComics() {
+      const el = document.getElementById('content');
+      try {
+        const res = await fetch('/api/comics');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || '加载失败');
+        const comics = data.comics || [];
+        if (comics.length === 0) {
+          el.className = '';
+          el.innerHTML = '<div class="empty"><p>🖼️ 暂无漫画</p><p>去<a href="/admin.html">管理后台</a>导入一本 CBZ 吧</p></div>';
+          return;
+        }
+        el.className = 'book-grid-cover';
+        el.innerHTML = comics.map(c => {
+          const title = c.title || '未命名';
+          const meta = `${c.page_count || 0} 页`;
+          if (c.cover_url) {
+            return `<a class="book-card-cover" href="/comic-read.html?id=${c.id}">
+              <img class="cover-img" src="${esc(c.cover_url)}" alt="${esc(title)}" loading="lazy">
+              <div class="card-body">
+                <h3>${esc(title)}</h3>
+                <div class="meta">${esc(meta)}</div>
+              </div>
+            </a>`;
+          }
+          const color = coverColor(title);
+          const firstChar = (title || '?')[0];
+          return `<a class="book-card-cover" href="/comic-read.html?id=${c.id}">
+            <div class="cover-placeholder" style="background:${color}">${esc(firstChar)}</div>
+            <div class="card-body">
+              <h3>${esc(title)}</h3>
+              <div class="meta">${esc(meta)}</div>
+            </div>
+          </a>`;
+        }).join('');
+      } catch (e) {
+        el.className = '';
+        el.innerHTML = `<div class="msg msg-error">${esc(e.message)}</div>`;
+      }
+    }
+    loadComics();
+  </script>
+</body>
+</html>
+

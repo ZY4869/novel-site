@@ -14,6 +14,7 @@
     <h1><a href="/">📚 我的书架</a></h1>
     <nav>
       <a href="https://github.com/xingzihai/novel-site" target="_blank" rel="noopener" title="GitHub">GitHub</a>
+      <a href="/comics.html">漫画</a>
       <a href="/admin.html">管理</a>
       <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">🌙</button>
     </nav>
@@ -77,6 +78,14 @@
 
         const tagsHtml = (b.tags || []).map(t => `<span class="tag-pill" style="background:${esc(t.color)}22;color:${esc(t.color)}">${esc(t.name)}</span>`).join('');
         const tagsBlock = tagsHtml ? `<div class="book-tags">${tagsHtml}</div>` : '';
+        const hasSource = !!(b.source_name || b.source_size);
+        const sourceHtml = hasSource ? `
+          <div style="margin-top:12px">
+            <a class="btn btn-sm" href="/api/books/${b.id}/source" target="_blank" rel="noopener">
+              下载源文件${b.source_name ? '：' + esc(b.source_name) : ''}${b.source_size ? '（' + formatBytes(b.source_size) + '）' : ''}
+            </a>
+          </div>
+        ` : '';
 
         let html;
         if (b.cover_key) {
@@ -89,6 +98,7 @@
                   ${b.author ? `<div class="author">作者：${esc(b.author)}</div>` : ''}
                   ${b.description ? `<div class="desc">${esc(b.description)}</div>` : ''}
                   ${tagsBlock}
+                  ${sourceHtml}
                 </div>
               </div>
             </div>
@@ -100,6 +110,7 @@
               ${b.author ? `<div class="author">作者：${esc(b.author)}</div>` : ''}
               ${b.description ? `<div class="desc">${esc(b.description)}</div>` : ''}
               ${tagsBlock}
+              ${sourceHtml}
             </div>
           `;
         }
@@ -107,7 +118,9 @@
           html += `<div class="search-bar" style="margin-top:16px;margin-bottom:0"><input type="text" id="chapter-search" placeholder="搜索章节标题..." autocomplete="off"><button onclick="filterChapters()">搜索</button></div>`;
         }
         if (chapters.length === 0) {
-          html += '<div class="empty"><p>暂无章节</p></div>';
+          html += hasSource
+            ? '<div class="empty"><p>暂无章节</p><p style="color:var(--text-light);font-size:13px">该书仅提供源文件下载</p></div>'
+            : '<div class="empty"><p>暂无章节</p></div>';
         } else {
           html += '<ul class="chapter-list">' + chapters.map(c => `
             <li>
@@ -146,6 +159,14 @@
       }
     }
     function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+    function formatBytes(bytes) {
+      const n = Number(bytes || 0);
+      if (!Number.isFinite(n) || n <= 0) return '0 B';
+      const units = ['B','KB','MB','GB','TB'];
+      let v = n, i = 0;
+      while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+      return (i === 0 ? v.toFixed(0) : v.toFixed(v >= 10 ? 1 : 2)) + ' ' + units[i];
+    }
 
     function getBookmarks(bookId) {
       try { return JSON.parse(localStorage.getItem(`bookmarks_${bookId}`)) || []; }
