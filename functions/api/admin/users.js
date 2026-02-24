@@ -9,7 +9,7 @@ export async function onRequestGet(context) {
   if (!requireSuperAdmin(auth)) return Response.json({ error: '仅超级管理员可管理用户' }, { status: 403 });
 
   const { results } = await env.DB.prepare(
-    "SELECT id, username, role, password_locked, created_at, updated_at FROM admin_users ORDER BY id"
+    "SELECT id, username, role, password_locked, github_id, github_login, avatar_url, created_at, updated_at FROM admin_users ORDER BY id"
   ).all();
   return Response.json({ admins: results });
 }

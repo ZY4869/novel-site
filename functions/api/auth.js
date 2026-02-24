@@ -2,7 +2,7 @@
 // POST /api/auth/logout — 登出
 // POST /api/auth/password — 修改密码
 // GET /api/auth/me — 验证当前session
-import { login, checkAdmin, changePassword, parseJsonBody, sha256Hash } from './_utils.js';
+import { login, checkAdmin, changePassword, parseJsonBody, sha256Hash, hmacSign } from './_utils.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -23,6 +23,7 @@ export async function onRequestPost(context) {
     if (!result.ok) {
       const status = result.reason === 'locked' ? 429 : 401;
       const msg = result.reason === 'locked' ? '登录失败次数过多，请10分钟后再试'
+        : result.reason === 'github_only' ? '该账号请使用 GitHub 登录'
         : '用户名或密码错误';
       return Response.json({ error: msg }, { status });
     }
@@ -83,7 +84,52 @@ export async function onRequestGet(context) {
   if (action === 'me') {
     const auth = await checkAdmin(request, env);
     if (!auth.ok) return Response.json({ authenticated: false }, { status: 401 });
-    return Response.json({ authenticated: true, username: auth.username, role: auth.role, userId: auth.userId, passwordLocked: auth.passwordLocked });
+    // 查 GitHub 信息
+    const userExtra = await env.DB.prepare('SELECT github_login, avatar_url FROM admin_users WHERE id = ?').bind(auth.userId).first();
+    return Response.json({
+      authenticated: true, username: auth.username, role: auth.role, userId: auth.userId,
+      passwordLocked: auth.passwordLocked,
+      githubLogin: userExtra?.github_login || null,
+      avatarUrl: userExtra?.avatar_url || null,
+    });
+  }
+
+  if (action === 'github-login') {
+    // 从 DB 读取 GitHub OAuth 配置
+    const enabled = await env.DB.prepare("SELECT value FROM site_settings WHERE key = 'github_oauth_enabled'").first();
+    if (enabled?.value !== 'true') {
+      return Response.json({ error: 'GitHub 登录未启用' }, { status: 400 });
+    }
+    const clientIdRow = await env.DB.prepare("SELECT value FROM site_settings WHERE key = 'github_client_id'").first();
+    const clientSecretRow = await env.DB.prepare("SELECT value FROM site_settings WHERE key = 'github_client_secret'").first();
+    if (!clientIdRow?.value || !clientSecretRow?.value) {
+      return Response.json({ error: 'GitHub OAuth 未配置' }, { status: 500 });
+    }
+
+    // 生成随机 state
+    const stateBytes = new Uint8Array(32);
+    crypto.getRandomValues(stateBytes);
+    const state = [...stateBytes].map(b => b.toString(16).padStart(2, '0')).join('');
+
+    // HMAC 签名 state，存入 httpOnly cookie
+    const signature = await hmacSign(state, clientSecretRow.value);
+    const cookie = `github_oauth_state=${state}.${signature}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`;
+
+    const redirectUri = new URL('/api/auth/github/callback', url.origin).toString();
+    const params = new URLSearchParams({
+      client_id: clientIdRow.value,
+      redirect_uri: redirectUri,
+      scope: 'read:user',
+      state,
+    });
+
+    return new Response(null, {
+      status: 302,
+      headers: {
+        'Location': `https://github.com/login/oauth/authorize?${params}`,
+        'Set-Cookie': cookie,
+      }
+    });
   }
 
   return Response.json({ error: 'Unknown action' }, { status: 400 });

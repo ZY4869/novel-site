@@ -83,6 +83,19 @@ async function ensureSchema(env) {
   try {
     await env.DB.prepare('CREATE TABLE IF NOT EXISTS book_tags (book_id INTEGER, tag_id INTEGER, PRIMARY KEY (book_id, tag_id))').run();
   } catch {}
+  // GitHub OAuth
+  try {
+    await env.DB.prepare('ALTER TABLE admin_users ADD COLUMN github_id INTEGER DEFAULT NULL').run();
+  } catch {}
+  try {
+    await env.DB.prepare('ALTER TABLE admin_users ADD COLUMN github_login TEXT DEFAULT NULL').run();
+  } catch {}
+  try {
+    await env.DB.prepare('ALTER TABLE admin_users ADD COLUMN avatar_url TEXT DEFAULT NULL').run();
+  } catch {}
+  try {
+    await env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_users_github_id ON admin_users(github_id) WHERE github_id IS NOT NULL').run();
+  } catch {}
 }
 
 // ===== 默认管理员（拒绝无密码创建） =====
@@ -155,6 +168,11 @@ export async function login(env, username, password, ip) {
   if (!user) {
     await recordFailedAttempt(env, ipHash);
     return { ok: false, reason: 'wrong' };
+  }
+
+  // GitHub OAuth 用户不能用密码登录
+  if (user.password_hash === 'github_oauth:no_password') {
+    return { ok: false, reason: 'github_only' };
   }
 
   const result = await verifyPassword(password, user.password_hash);
@@ -285,4 +303,36 @@ export async function checkBookOwnership(auth, env, bookId) {
 
 export async function parseJsonBody(request) {
   try { return await request.json(); } catch { return null; }
+}
+
+// ===== GitHub OAuth 工具 =====
+
+export async function hmacSign(data, secret) {
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data));
+  return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+export async function hmacVerify(data, signature, secret) {
+  const expected = await hmacSign(data, secret);
+  if (expected.length !== signature.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
+  return diff === 0;
+}
+
+// 为 GitHub 用户创建 session（复用现有 token 机制）
+export async function createSession(env, userId) {
+  const token = generateToken();
+  const tokenHash = await sha256Hash(token);
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  await env.DB.prepare('INSERT INTO admin_sessions (token, user_id, expires_at) VALUES (?, ?, ?)')
+    .bind(tokenHash, userId, expiresAt).run();
+  // 限制单用户最多10个活跃session
+  await env.DB.prepare(
+    "DELETE FROM admin_sessions WHERE user_id = ? AND id NOT IN (SELECT id FROM admin_sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 10)"
+  ).bind(userId, userId).run().catch(() => {});
+  return { token, expiresAt };
 }
