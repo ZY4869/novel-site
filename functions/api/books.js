@@ -1,8 +1,13 @@
 // GET /api/books — 获取所有书籍列表（含标签）
 export async function onRequestGet(context) {
-  const { env } = context;
+  const { request, env } = context;
+
+  // 管理员请求（带token）返回 created_by 用于前端 ownership 判断
+  const isAdmin = request.headers.get('Authorization')?.startsWith('Bearer ');
+
   const { results } = await env.DB.prepare(`
-    SELECT b.*, 
+    SELECT b.id, b.title, b.author, b.description, b.cover_key, b.created_at, b.updated_at,
+      ${isAdmin ? 'b.created_by,' : ''}
       (SELECT COUNT(*) FROM chapters WHERE book_id = b.id) as chapter_count,
       (SELECT COALESCE(SUM(word_count), 0) FROM chapters WHERE book_id = b.id) as total_words
     FROM books b

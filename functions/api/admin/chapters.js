@@ -1,5 +1,5 @@
 // POST /api/admin/chapters — 创建新章节
-import { checkAdmin, validateId, parseJsonBody } from '../_utils.js';
+import { checkAdmin, validateId, parseJsonBody, checkBookOwnership } from '../_utils.js';
 
 const MAX_CONTENT_LENGTH = 500000; // 50万字
 
@@ -37,6 +37,11 @@ export async function onRequestPost(context) {
   const book = await env.DB.prepare('SELECT id FROM books WHERE id = ?')
     .bind(book_id).first();
   if (!book) return Response.json({ error: 'Book not found' }, { status: 404 });
+
+  // demo只能往自己的书里添加章节
+  if (!await checkBookOwnership(auth, env, book_id)) {
+    return Response.json({ error: '只能向自己创建的书籍添加章节' }, { status: 403 });
+  }
 
   const lastChapter = await env.DB.prepare(
     'SELECT MAX(sort_order) as max_order FROM chapters WHERE book_id = ?'

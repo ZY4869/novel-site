@@ -68,6 +68,10 @@ async function ensureSchema(env) {
   } catch {
     // 列已存在，静默忽略
   }
+  // 书籍所有者
+  try {
+    await env.DB.prepare('ALTER TABLE books ADD COLUMN created_by INTEGER DEFAULT NULL').run();
+  } catch {}
   // 书籍封面
   try {
     await env.DB.prepare('ALTER TABLE books ADD COLUMN cover_key TEXT DEFAULT NULL').run();
@@ -78,6 +82,19 @@ async function ensureSchema(env) {
   } catch {}
   try {
     await env.DB.prepare('CREATE TABLE IF NOT EXISTS book_tags (book_id INTEGER, tag_id INTEGER, PRIMARY KEY (book_id, tag_id))').run();
+  } catch {}
+  // GitHub OAuth
+  try {
+    await env.DB.prepare('ALTER TABLE admin_users ADD COLUMN github_id INTEGER DEFAULT NULL').run();
+  } catch {}
+  try {
+    await env.DB.prepare('ALTER TABLE admin_users ADD COLUMN github_login TEXT DEFAULT NULL').run();
+  } catch {}
+  try {
+    await env.DB.prepare('ALTER TABLE admin_users ADD COLUMN avatar_url TEXT DEFAULT NULL').run();
+  } catch {}
+  try {
+    await env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_users_github_id ON admin_users(github_id) WHERE github_id IS NOT NULL').run();
   } catch {}
 }
 
@@ -131,7 +148,9 @@ export async function checkAdmin(request, env) {
     await env.DB.prepare("DELETE FROM auth_attempts WHERE last_attempt < datetime('now', '-1 day')").run().catch(() => {});
   }
 
-  return { ok: true, userId: session.user_id, username: session.username, role: session.role || 'editor', passwordLocked: session.password_locked === 1 };
+    // 兼容旧角色：editor → admin
+  const role = session.role === 'editor' ? 'admin' : (session.role || 'demo');
+  return { ok: true, userId: session.user_id, username: session.username, role, passwordLocked: session.password_locked === 1 };
 }
 
 // ===== 登录 =====
@@ -149,6 +168,11 @@ export async function login(env, username, password, ip) {
   if (!user) {
     await recordFailedAttempt(env, ipHash);
     return { ok: false, reason: 'wrong' };
+  }
+
+  // GitHub OAuth 用户不能用密码登录
+  if (user.password_hash === 'github_oauth:no_password') {
+    return { ok: false, reason: 'github_only' };
   }
 
   const result = await verifyPassword(password, user.password_hash);
@@ -181,7 +205,8 @@ export async function login(env, username, password, ip) {
   await env.DB.prepare("DELETE FROM admin_sessions WHERE expires_at < datetime('now')").run().catch(() => {});
   await env.DB.prepare("DELETE FROM auth_attempts WHERE last_attempt < datetime('now', '-1 day')").run().catch(() => {});
 
-  return { ok: true, token, username: user.username, role: user.role || 'editor', expiresAt };
+  const loginRole = user.role === 'editor' ? 'admin' : (user.role || 'demo');
+  return { ok: true, token, username: user.username, role: loginRole, userId: user.id, expiresAt };
 }
 
 // ===== 修改密码 =====
@@ -254,10 +279,60 @@ async function clearFailedAttempts(env, ip) {
 // ===== 工具函数 =====
 export function validateId(id) { return /^\d+$/.test(id); }
 
+// 角色层级：super_admin > admin > demo（editor是admin的旧名，兼容）
+const ROLE_LEVEL = { super_admin: 3, admin: 2, editor: 2, demo: 1 };
+
 export function requireSuperAdmin(auth) {
   return auth.role === 'super_admin';
 }
 
+// 检查是否满足最低角色要求
+export function requireMinRole(auth, minRole) {
+  return (ROLE_LEVEL[auth.role] || 0) >= (ROLE_LEVEL[minRole] || 99);
+}
+
+// demo角色的书籍所有权检查：返回true表示允许操作
+export async function checkBookOwnership(auth, env, bookId) {
+  // admin及以上不受限
+  if (requireMinRole(auth, 'admin')) return true;
+  // demo只能操作自己创建的书
+  const book = await env.DB.prepare('SELECT created_by FROM books WHERE id = ?').bind(bookId).first();
+  if (!book) return false; // 书不存在
+  return book.created_by === auth.userId;
+}
+
 export async function parseJsonBody(request) {
   try { return await request.json(); } catch { return null; }
+}
+
+// ===== GitHub OAuth 工具 =====
+
+export async function hmacSign(data, secret) {
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data));
+  return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+export async function hmacVerify(data, signature, secret) {
+  const expected = await hmacSign(data, secret);
+  if (expected.length !== signature.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
+  return diff === 0;
+}
+
+// 为 GitHub 用户创建 session（复用现有 token 机制）
+export async function createSession(env, userId) {
+  const token = generateToken();
+  const tokenHash = await sha256Hash(token);
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  await env.DB.prepare('INSERT INTO admin_sessions (token, user_id, expires_at) VALUES (?, ?, ?)')
+    .bind(tokenHash, userId, expiresAt).run();
+  // 限制单用户最多10个活跃session
+  await env.DB.prepare(
+    "DELETE FROM admin_sessions WHERE user_id = ? AND id NOT IN (SELECT id FROM admin_sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 10)"
+  ).bind(userId, userId).run().catch(() => {});
+  return { token, expiresAt };
 }

@@ -1,5 +1,5 @@
 // POST/DELETE /api/admin/covers — 上传/删除书籍封面（R2存储）
-import { checkAdmin, validateId } from '../_utils.js';
+import { checkAdmin, validateId, checkBookOwnership } from '../_utils.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -10,8 +10,13 @@ export async function onRequestPost(context) {
   const bookId = url.searchParams.get('book_id');
   if (!bookId || !validateId(bookId)) return Response.json({ error: 'Valid book_id required' }, { status: 400 });
 
-  const book = await env.DB.prepare('SELECT id FROM books WHERE id = ?').bind(bookId).first();
+  const book = await env.DB.prepare('SELECT id, cover_key FROM books WHERE id = ?').bind(bookId).first();
   if (!book) return Response.json({ error: 'Book not found' }, { status: 404 });
+
+  // demo只能操作自己书的封面
+  if (!await checkBookOwnership(auth, env, bookId)) {
+    return Response.json({ error: '只能管理自己书籍的封面' }, { status: 403 });
+  }
 
   const formData = await request.formData();
   const file = formData.get('file');
@@ -25,9 +30,8 @@ export async function onRequestPost(context) {
   const key = `covers/${bookId}.${ext}`;
 
   // 删除旧封面
-  const oldBook = await env.DB.prepare('SELECT cover_key FROM books WHERE id = ?').bind(bookId).first();
-  if (oldBook && oldBook.cover_key) {
-    await env.R2.delete(oldBook.cover_key).catch(() => {});
+  if (book.cover_key) {
+    await env.R2.delete(book.cover_key).catch(() => {});
   }
 
   await env.R2.put(key, file.stream(), { httpMetadata: { contentType: ct } });
@@ -44,6 +48,11 @@ export async function onRequestDelete(context) {
   const url = new URL(request.url);
   const bookId = url.searchParams.get('book_id');
   if (!bookId || !validateId(bookId)) return Response.json({ error: 'Valid book_id required' }, { status: 400 });
+
+  // demo只能操作自己书的封面
+  if (!await checkBookOwnership(auth, env, bookId)) {
+    return Response.json({ error: '只能管理自己书籍的封面' }, { status: 403 });
+  }
 
   const book = await env.DB.prepare('SELECT cover_key FROM books WHERE id = ?').bind(bookId).first();
   if (book && book.cover_key) {

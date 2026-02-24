@@ -9,9 +9,10 @@ export async function onRequestGet(context) {
     return Response.json({ error: 'Invalid chapter ID' }, { status: 400 });
   }
 
-  // 从D1读取章节元数据
+  // 从D1读取章节元数据（不暴露content_key）
   const chapter = await env.DB.prepare(`
-    SELECT c.*, b.title as book_title
+    SELECT c.id, c.book_id, c.title, c.sort_order, c.word_count, c.created_at, c.updated_at,
+           b.title as book_title
     FROM chapters c
     JOIN books b ON c.book_id = b.id
     WHERE c.id = ?
@@ -21,11 +22,12 @@ export async function onRequestGet(context) {
     return Response.json({ error: 'Chapter not found' }, { status: 404 });
   }
 
-  // 从R2读取正文内容
+  // 从R2读取正文内容（需要单独查content_key）
   let content = '';
-  const r2Object = await env.R2.get(chapter.content_key);
-  if (r2Object) {
-    content = await r2Object.text();
+  const chapterFull = await env.DB.prepare('SELECT content_key FROM chapters WHERE id = ?').bind(id).first();
+  if (chapterFull) {
+    const r2Object = await env.R2.get(chapterFull.content_key);
+    if (r2Object) content = await r2Object.text();
   }
 
   // 查询上一章和下一章

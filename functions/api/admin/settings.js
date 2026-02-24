@@ -1,4 +1,6 @@
 // PUT /api/admin/settings — 更新站点设置
+// GET /api/admin/settings/github — 读取 GitHub OAuth 配置（仅超管）
+// PUT /api/admin/settings/github — 保存 GitHub OAuth 配置（仅超管）
 import { checkAdmin, requireSuperAdmin, parseJsonBody } from '../_utils.js';
 
 const ALLOWED_KEYS = ['site_name', 'site_desc', 'footer_text'];
@@ -36,4 +38,63 @@ export async function onRequestPut(context) {
   }
 
   return Response.json({ success: true, updated: updates.length });
+}
+
+export async function onRequestGet(context) {
+  const { request, env } = context;
+  const auth = await checkAdmin(request, env);
+  if (!auth.ok) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!requireSuperAdmin(auth)) return Response.json({ error: '仅超级管理员可查看' }, { status: 403 });
+
+  const url = new URL(request.url);
+  // GET /api/admin/settings?section=github
+  if (url.searchParams.get('section') === 'github') {
+    const enabled = await env.DB.prepare("SELECT value FROM site_settings WHERE key = 'github_oauth_enabled'").first();
+    const clientId = await env.DB.prepare("SELECT value FROM site_settings WHERE key = 'github_client_id'").first();
+    const hasSecret = await env.DB.prepare("SELECT value FROM site_settings WHERE key = 'github_client_secret'").first();
+    return Response.json({
+      enabled: enabled?.value === 'true',
+      clientId: clientId?.value || '',
+      hasSecret: !!hasSecret?.value,  // 不返回 secret 明文，只告知是否已配置
+    });
+  }
+
+  return Response.json({ error: 'Unknown section' }, { status: 400 });
+}
+
+export async function onRequestPost(context) {
+  const { request, env } = context;
+  const auth = await checkAdmin(request, env);
+  if (!auth.ok) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!requireSuperAdmin(auth)) return Response.json({ error: '仅超级管理员可修改' }, { status: 403 });
+
+  const body = await parseJsonBody(request);
+  if (!body) return Response.json({ error: 'Invalid JSON' }, { status: 400 });
+
+  const url = new URL(request.url);
+  // POST /api/admin/settings?section=github
+  if (url.searchParams.get('section') === 'github') {
+    const { enabled, clientId, clientSecret } = body;
+
+    // 保存启用状态
+    await env.DB.prepare("INSERT OR REPLACE INTO site_settings (key, value) VALUES ('github_oauth_enabled', ?)")
+      .bind(enabled ? 'true' : 'false').run();
+
+    // 保存 Client ID
+    if (clientId !== undefined) {
+      const id = (clientId || '').trim().slice(0, 100);
+      await env.DB.prepare("INSERT OR REPLACE INTO site_settings (key, value) VALUES ('github_client_id', ?)")
+        .bind(id).run();
+    }
+
+    // 保存 Client Secret（只在提供了新值时更新）
+    if (clientSecret && clientSecret.trim()) {
+      await env.DB.prepare("INSERT OR REPLACE INTO site_settings (key, value) VALUES ('github_client_secret', ?)")
+        .bind(clientSecret.trim().slice(0, 200)).run();
+    }
+
+    return Response.json({ success: true });
+  }
+
+  return Response.json({ error: 'Unknown section' }, { status: 400 });
 }

@@ -32,6 +32,16 @@
         </div>
         <button class="btn" onclick="doLogin()" style="width:100%">登录</button>
         <div id="login-msg" style="margin-top:8px"></div>
+        <div style="margin-top:16px;text-align:center">
+          <div id="github-login-section" style="display:none">
+            <div style="color:var(--text-light);font-size:13px;margin-bottom:8px">— 或 —</div>
+            <button class="btn" onclick="doGitHubLogin()" style="width:100%;background:#24292e;color:#fff;border:none;padding:10px;border-radius:var(--radius);cursor:pointer;font-size:14px">
+              <svg style="vertical-align:middle;margin-right:6px" width="18" height="18" viewBox="0 0 16 16" fill="white"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+              GitHub 登录（Demo 体验）
+            </button>
+            <div style="font-size:12px;color:var(--text-light);margin-top:4px">首次登录自动注册为演示管理员</div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -115,6 +125,37 @@
         </div>
         <button class="btn" onclick="saveSettings()">保存设置</button>
         <div id="settings-msg"></div>
+
+        <!-- GitHub OAuth 配置 -->
+        <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border)">
+          <h4 style="margin:0 0 12px">🐙 Demo 注册（GitHub 登录）</h4>
+          <div class="form-group">
+            <label>
+              <input type="checkbox" id="gh-oauth-enabled" onchange="toggleGitHubConfig()"> 启用 GitHub 登录注册
+            </label>
+            <div style="font-size:12px;color:var(--text-light);margin-top:2px">开启后，登录页会显示"GitHub 登录"按钮，新用户自动注册为演示管理员</div>
+          </div>
+          <div id="gh-oauth-config" style="display:none">
+            <div style="background:var(--bg);padding:10px;border-radius:var(--radius);margin-bottom:12px;font-size:13px;color:var(--text-light)">
+              <strong>配置步骤：</strong><br>
+              1. 打开 <a href="https://github.com/settings/developers" target="_blank" style="color:var(--primary)">GitHub Developer Settings</a><br>
+              2. 点击 OAuth Apps → New OAuth App<br>
+              3. Homepage URL 填：<code id="gh-homepage-url"></code><br>
+              4. Callback URL 填：<code id="gh-callback-url"></code><br>
+              5. 创建后把 Client ID 和 Client Secret 填到下面
+            </div>
+            <div class="form-group">
+              <label>Client ID</label>
+              <input type="text" id="gh-client-id" placeholder="Ov23li..." maxlength="100">
+            </div>
+            <div class="form-group">
+              <label>Client Secret <span id="gh-secret-status" style="font-size:12px"></span></label>
+              <input type="password" id="gh-client-secret" placeholder="留空则保持原值不变" maxlength="200">
+            </div>
+            <button class="btn" onclick="saveGitHubConfig()">保存 GitHub 配置</button>
+            <div id="gh-config-msg" style="margin-top:8px"></div>
+          </div>
+        </div>
       </div>
 
       <!-- TXT导入 -->
@@ -376,13 +417,16 @@
             <button class="btn" onclick="createAdmin()">创建</button>
           </div>
           <div style="margin-top:4px">
-            <label style="font-size:12px;color:var(--text-light)">
-              <input type="checkbox" id="new-admin-super"> 超级管理员权限
-            </label>
+            <label style="font-size:12px;color:var(--text-light)">角色：</label>
+            <select id="new-admin-role" style="padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:13px">
+              <option value="demo">演示管理员</option>
+              <option value="admin">管理员</option>
+              <option value="super_admin">超级管理员</option>
+            </select>
           </div>
           <div style="margin-top:4px">
             <label style="font-size:12px;color:var(--text-light)">
-              <input type="checkbox" id="new-admin-pwd-lock"> 禁止修改密码（演示账号用）
+              <input type="checkbox" id="new-admin-pwd-lock"> 禁止修改密码
             </label>
           </div>
           <div id="admin-user-msg"></div>
@@ -416,9 +460,41 @@
     // ===== 认证 =====
     let authToken = sessionStorage.getItem('auth_token') || '';
     let currentRole = sessionStorage.getItem('auth_role') || '';
+    let currentUserId = Number(sessionStorage.getItem('auth_uid')) || 0;
     let currentPasswordLocked = false;
 
     function getToken() { return authToken; }
+
+    // ===== GitHub OAuth =====
+    function doGitHubLogin() {
+      // 跳转到后端发起 OAuth（后端设置签名 cookie + 302 到 GitHub）
+      location.href = '/api/auth?action=github-login';
+    }
+
+    // 页面加载时检查 GitHub OAuth 回调 + 检查是否启用
+    (function handleGitHubCallback() {
+      const hash = location.hash;
+      if (hash.startsWith('#github_token=')) {
+        const token = hash.slice('#github_token='.length);
+        if (token) {
+          authToken = token;
+          sessionStorage.setItem('auth_token', token);
+          history.replaceState(null, '', location.pathname);
+          checkSession();
+        }
+      } else if (hash.startsWith('#github_error=')) {
+        const error = decodeURIComponent(hash.slice('#github_error='.length));
+        history.replaceState(null, '', location.pathname);
+        setTimeout(() => showMsg('login-msg', 'GitHub 登录失败：' + error, 'error'), 100);
+      }
+      // 检查是否启用 GitHub 登录
+      fetch('/api/settings?check=github').then(r => r.json()).then(d => {
+        if (d.githubLoginEnabled) {
+          const el = document.getElementById('github-login-section');
+          if (el) el.style.display = '';
+        }
+      }).catch(() => {});
+    })();
 
     async function doLogin() {
       const username = document.getElementById('login-user').value.trim();
@@ -432,9 +508,11 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
         authToken = data.token;
-        currentRole = data.role || 'editor';
+        currentRole = data.role || 'demo';
+        currentUserId = data.userId || 0;
         sessionStorage.setItem('auth_token', authToken);
         sessionStorage.setItem('auth_role', currentRole);
+        sessionStorage.setItem('auth_uid', currentUserId);
         showAdminPanel(data.username, currentRole);
       } catch(e) { showMsg('login-msg', e.message, 'error'); }
     }
@@ -445,11 +523,11 @@
         const res = await fetch('/api/auth?action=me', {
           headers:{'Authorization':'Bearer '+authToken}
         });
-        if (!res.ok) { authToken=''; currentRole=''; sessionStorage.removeItem('auth_token'); sessionStorage.removeItem('auth_role'); return false; }
+        if (!res.ok) { authToken=''; currentRole=''; currentUserId=0; sessionStorage.removeItem('auth_token'); sessionStorage.removeItem('auth_role'); sessionStorage.removeItem('auth_uid'); return false; }
         const data = await res.json();
-        if (data.authenticated) { currentRole = data.role || 'editor'; currentPasswordLocked = !!data.passwordLocked; sessionStorage.setItem('auth_role', currentRole); showAdminPanel(data.username, currentRole); return true; }
+        if (data.authenticated) { currentRole = data.role || 'demo'; currentUserId = data.userId || 0; currentPasswordLocked = !!data.passwordLocked; sessionStorage.setItem('auth_role', currentRole); sessionStorage.setItem('auth_uid', currentUserId); showAdminPanel(data.username, currentRole); return true; }
       } catch {}
-      authToken=''; currentRole=''; sessionStorage.removeItem('auth_token'); sessionStorage.removeItem('auth_role');
+      authToken=''; currentRole=''; currentUserId=0; sessionStorage.removeItem('auth_token'); sessionStorage.removeItem('auth_role'); sessionStorage.removeItem('auth_uid');
       return false;
     }
 
@@ -457,24 +535,29 @@
       document.getElementById('login-panel').style.display = 'none';
       document.getElementById('admin-panel').style.display = 'block';
       document.getElementById('current-user').textContent = username;
-      document.getElementById('user-info').textContent = username + (role === 'super_admin' ? ' (超管)' : ' (编辑)');
+      document.getElementById('user-info').textContent = username + (role === 'super_admin' ? ' (超管)' : role === 'admin' ? ' (管理)' : ' (演示)');
       document.getElementById('user-info').style.display = 'inline';
-      // 密码锁定：隐藏修改密码链接
+      // 密码锁定或demo角色：隐藏修改密码链接
       const pwdLink = document.querySelector('a[onclick*="showChangePassword"]');
-      if (pwdLink) pwdLink.style.display = currentPasswordLocked ? 'none' : '';
+      if (pwdLink) pwdLink.style.display = (currentPasswordLocked || role === 'demo') ? 'none' : '';
       // super_admin专属功能
       const saEls = document.querySelectorAll('.super-admin-only');
       saEls.forEach(el => el.style.display = role === 'super_admin' ? '' : 'none');
+      // demo限制：隐藏EPUB导入和删除书籍
+      const demoHideEls = document.querySelectorAll('.hide-for-demo');
+      demoHideEls.forEach(el => el.style.display = role === 'demo' ? 'none' : '');
       refreshAllBooks(); loadSettings(); loadStats(); loadFontList();
-      if (role === 'super_admin') loadAdminUsers();
+      if (role === 'super_admin') { loadAdminUsers(); loadGitHubConfig(); }
     }
 
     async function doLogout() {
       try { await fetch('/api/auth?action=logout',{method:'POST',headers:{'Authorization':'Bearer '+authToken}}); } catch{}
       authToken = '';
       currentRole = '';
+      currentUserId = 0;
       sessionStorage.removeItem('auth_token');
       sessionStorage.removeItem('auth_role');
+      sessionStorage.removeItem('auth_uid');
       document.getElementById('login-panel').style.display = 'block';
       document.getElementById('admin-panel').style.display = 'none';
       document.getElementById('user-info').style.display = 'none';
@@ -531,6 +614,48 @@
         showMsg('settings-msg','设置已保存','success');
         document.querySelector('.navbar h1 a').textContent = '📚 ' + (settings.site_name || '我的书架');
       } catch(e) { showMsg('settings-msg',e.message,'error'); }
+    }
+
+    // ===== GitHub OAuth 配置 =====
+    function toggleGitHubConfig() {
+      document.getElementById('gh-oauth-config').style.display =
+        document.getElementById('gh-oauth-enabled').checked ? '' : 'none';
+    }
+
+    async function loadGitHubConfig() {
+      // 填充 URL 提示
+      document.getElementById('gh-homepage-url').textContent = location.origin;
+      document.getElementById('gh-callback-url').textContent = location.origin + '/api/auth/github/callback';
+      try {
+        const res = await api('GET', '/api/admin/settings?section=github');
+        const data = await res.json();
+        if (!res.ok) return;
+        document.getElementById('gh-oauth-enabled').checked = data.enabled;
+        document.getElementById('gh-client-id').value = data.clientId || '';
+        document.getElementById('gh-secret-status').textContent = data.hasSecret ? '（已配置 ✅）' : '（未配置）';
+        toggleGitHubConfig();
+      } catch {}
+    }
+
+    async function saveGitHubConfig() {
+      const enabled = document.getElementById('gh-oauth-enabled').checked;
+      const clientId = document.getElementById('gh-client-id').value.trim();
+      const clientSecret = document.getElementById('gh-client-secret').value.trim();
+
+      if (enabled && !clientId) {
+        return showMsg('gh-config-msg', '请填写 Client ID', 'error');
+      }
+
+      try {
+        const res = await api('POST', '/api/admin/settings?section=github', {
+          enabled, clientId, clientSecret: clientSecret || undefined
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        showMsg('gh-config-msg', '配置已保存', 'success');
+        document.getElementById('gh-client-secret').value = '';
+        loadGitHubConfig();
+      } catch(e) { showMsg('gh-config-msg', e.message, 'error'); }
     }
 
     // ===== TXT导入 =====
@@ -751,18 +876,21 @@
           el.innerHTML='<li style="padding:12px 0;color:var(--text-light)">暂无书籍</li>'; _booksCache=[]; return;
         }
         _booksCache = data.books;
-        el.innerHTML=data.books.map(b=>`
+        el.innerHTML=data.books.map(b=>{
+          const isOwner = currentRole !== 'demo' || b.created_by === currentUserId;
+          const canDelete = currentRole !== 'demo' || b.created_by === currentUserId;
+          return `
           <li data-id="${b.id}">
             <div class="item-info">
-              <div class="item-title">${esc(b.title)}</div>
+              <div class="item-title">${esc(b.title)}${currentRole === 'demo' && !isOwner ? ' <span style="font-size:11px;color:var(--text-light)">(他人)</span>' : ''}</div>
               <div class="item-meta">${b.author?esc(b.author)+' · ':''}${b.chapter_count} 章 · ${b.total_words} 字</div>
             </div>
             <div class="item-actions">
-              <button class="btn btn-sm btn-edit-book">编辑</button>
-              <button class="btn btn-sm btn-danger btn-delete-book">删除</button>
+              ${isOwner ? '<button class="btn btn-sm btn-edit-book">编辑</button>' : ''}
+              ${canDelete ? '<button class="btn btn-sm btn-danger btn-delete-book">删除</button>' : ''}
             </div>
           </li>
-        `).join('');
+        `}).join('');
       } catch(e) {
         const el=document.getElementById('book-list');
         el.innerHTML=`<li class="msg msg-error">${esc(e.message)}</li>`;
@@ -793,9 +921,12 @@
 
     function renderBookSelects(data) {
       try {
-        const opts=(!data.books||data.books.length===0)
-          ?'<option value="">请先创建一本书</option>'
-          :data.books.map(b=>`<option value="${b.id}">${esc(b.title)}</option>`).join('');
+        const allBooks = data.books || [];
+        // demo用户只能在添加章节/章节管理/导入中选自己的书
+        const myBooks = currentRole === 'demo' ? allBooks.filter(b => b.created_by === currentUserId) : allBooks;
+        const opts = myBooks.length === 0
+          ? '<option value="">请先创建一本书</option>'
+          : myBooks.map(b => `<option value="${b.id}">${esc(b.title)}</option>`).join('');
         document.getElementById('chapter-book').innerHTML=opts;
         document.getElementById('import-book').innerHTML=opts;
         document.getElementById('manage-book').innerHTML='<option value="">选择书籍...</option>'+opts;
@@ -1035,8 +1166,12 @@
         _adminsCache = admins;
         const el = document.getElementById('admin-users-list');
         if (admins.length === 0) { el.innerHTML = '<p style="color:var(--text-light);font-size:13px">暂无管理员</p>'; return; }
-        el.innerHTML = '<table style="width:100%;font-size:14px;border-collapse:collapse"><thead><tr style="border-bottom:2px solid var(--border)"><th style="text-align:left;padding:6px">用户名</th><th style="text-align:left;padding:6px">角色</th><th style="text-align:left;padding:6px">密码</th><th style="text-align:left;padding:6px">创建时间</th><th style="text-align:right;padding:6px">操作</th></tr></thead><tbody>' +
-          admins.map(a => `<tr data-id="${a.id}" data-name="${esc(a.username)}" data-lock="${a.password_locked ? 1 : 0}" style="border-bottom:1px solid var(--border)"><td style="padding:6px">${esc(a.username)}</td><td style="padding:6px"><select class="admin-role-select" data-id="${a.id}" style="padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:13px"><option value="super_admin"${a.role==='super_admin'?' selected':''}>超级管理员</option><option value="editor"${a.role==='editor'?' selected':''}>编辑</option></select></td><td style="padding:6px"><span title="${a.password_locked ? '密码已锁定' : '密码可修改'}">${a.password_locked ? '🔒' : '🔓'}</span> <button class="btn btn-sm btn-toggle-pwd-lock" data-action="toggle-pwd-lock" style="font-size:11px;padding:1px 6px">${a.password_locked ? '解锁' : '锁定'}</button></td><td style="padding:6px;color:var(--text-light);font-size:12px">${a.created_at ? a.created_at.slice(0,10) : '-'}</td><td style="padding:6px;text-align:right"><button class="btn btn-sm btn-danger btn-delete-admin" data-action="delete-admin">删除</button></td></tr>`).join('') +
+        el.innerHTML = '<table style="width:100%;font-size:14px;border-collapse:collapse"><thead><tr style="border-bottom:2px solid var(--border)"><th style="text-align:left;padding:6px">用户名</th><th style="text-align:left;padding:6px">角色</th><th style="text-align:left;padding:6px">来源</th><th style="text-align:left;padding:6px">密码</th><th style="text-align:left;padding:6px">创建时间</th><th style="text-align:right;padding:6px">操作</th></tr></thead><tbody>' +
+          admins.map(a => {
+            const isGH = !!a.github_id;
+            const ghInfo = isGH ? `<span title="GitHub: ${esc(a.github_login || '')}">${a.avatar_url ? '<img src="'+esc(a.avatar_url)+'" style="width:16px;height:16px;border-radius:50%;vertical-align:middle;margin-right:3px">' : ''}🐙 ${esc(a.github_login || '')}</span>` : '<span style="color:var(--text-light)">本地</span>';
+            return `<tr data-id="${a.id}" data-name="${esc(a.username)}" data-lock="${a.password_locked ? 1 : 0}" style="border-bottom:1px solid var(--border)"><td style="padding:6px">${esc(a.username)}</td><td style="padding:6px"><select class="admin-role-select" data-id="${a.id}" style="padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:13px"><option value="super_admin"${a.role==='super_admin'?' selected':''}>超级管理员</option><option value="admin"${a.role==='admin'?' selected':''}>管理员</option><option value="demo"${a.role==='demo'?' selected':''}>演示</option></select></td><td style="padding:6px;font-size:12px">${ghInfo}</td><td style="padding:6px"><span title="${a.password_locked ? '密码已锁定' : '密码可修改'}">${a.password_locked ? '🔒' : '🔓'}</span> <button class="btn btn-sm btn-toggle-pwd-lock" data-action="toggle-pwd-lock" style="font-size:11px;padding:1px 6px">${a.password_locked ? '解锁' : '锁定'}</button></td><td style="padding:6px;color:var(--text-light);font-size:12px">${a.created_at ? a.created_at.slice(0,10) : '-'}</td><td style="padding:6px;text-align:right"><button class="btn btn-sm btn-danger btn-delete-admin" data-action="delete-admin">删除</button></td></tr>`;
+          }).join('') +
           '</tbody></table>';
       } catch {}
     }
@@ -1064,11 +1199,11 @@
     async function createAdmin() {
       const username = document.getElementById('new-admin-user').value.trim();
       const password = document.getElementById('new-admin-pass').value;
-      const isSuper = document.getElementById('new-admin-super').checked;
+      const role = document.getElementById('new-admin-role').value;
       const pwdLock = document.getElementById('new-admin-pwd-lock').checked;
       if (!username || !password) return showMsg('admin-user-msg', '请填写用户名和密码', 'error');
       try {
-        const res = await api('POST', '/api/admin/users', { username, password, role: isSuper ? 'super_admin' : 'editor', password_locked: pwdLock ? 1 : 0 });
+        const res = await api('POST', '/api/admin/users', { username, password, role, password_locked: pwdLock ? 1 : 0 });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
         showMsg('admin-user-msg', data.message, 'success');
@@ -1305,10 +1440,12 @@
         const res = await fetch('/api/books');
         const data = await res.json();
         const sel = document.getElementById('epub-book-select');
-        if (!data.books || data.books.length === 0) {
+        const allBooks = data.books || [];
+        const myBooks = currentRole === 'demo' ? allBooks.filter(b => b.created_by === currentUserId) : allBooks;
+        if (myBooks.length === 0) {
           sel.innerHTML = '<option value="">请先创建一本书</option>';
         } else {
-          sel.innerHTML = data.books.map(b => `<option value="${b.id}">${esc(b.title)}</option>`).join('');
+          sel.innerHTML = myBooks.map(b => `<option value="${b.id}">${esc(b.title)}</option>`).join('');
         }
       } catch {}
     }

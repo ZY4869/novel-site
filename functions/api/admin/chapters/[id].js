@@ -1,6 +1,6 @@
 // PUT /api/admin/chapters/:id — 编辑章节
 // DELETE /api/admin/chapters/:id — 删除章节
-import { checkAdmin, validateId, parseJsonBody } from '../../_utils.js';
+import { checkAdmin, validateId, parseJsonBody, checkBookOwnership } from '../../_utils.js';
 
 const MAX_CONTENT_LENGTH = 500000;
 
@@ -9,19 +9,24 @@ async function authCheck(request, env) {
   if (!auth.ok) {
     const status = auth.reason === 'locked' ? 429 : 401;
     const msg = auth.reason === 'locked' ? 'Too many failed attempts, try again later' : 'Unauthorized';
-    return Response.json({ error: msg }, { status });
+    return { denied: Response.json({ error: msg }, { status }) };
   }
-  return null;
+  return { auth };
 }
 
 export async function onRequestPut(context) {
   const { request, env, params } = context;
-  const denied = await authCheck(request, env);
+  const { denied, auth } = await authCheck(request, env);
   if (denied) return denied;
   if (!validateId(params.id)) return Response.json({ error: 'Invalid chapter ID' }, { status: 400 });
 
   const chapter = await env.DB.prepare('SELECT * FROM chapters WHERE id = ?').bind(params.id).first();
   if (!chapter) return Response.json({ error: 'Chapter not found' }, { status: 404 });
+
+  // demo只能编辑自己书的章节
+  if (!await checkBookOwnership(auth, env, chapter.book_id)) {
+    return Response.json({ error: '只能编辑自己书籍的章节' }, { status: 403 });
+  }
 
   const body = await parseJsonBody(request);
   if (!body) return Response.json({ error: 'Invalid JSON' }, { status: 400 });
@@ -56,12 +61,17 @@ export async function onRequestPut(context) {
 
 export async function onRequestDelete(context) {
   const { request, env, params } = context;
-  const denied = await authCheck(request, env);
+  const { denied, auth } = await authCheck(request, env);
   if (denied) return denied;
   if (!validateId(params.id)) return Response.json({ error: 'Invalid chapter ID' }, { status: 400 });
 
   const chapter = await env.DB.prepare('SELECT * FROM chapters WHERE id = ?').bind(params.id).first();
   if (!chapter) return Response.json({ error: 'Chapter not found' }, { status: 404 });
+
+  // demo只能删除自己书的章节
+  if (!await checkBookOwnership(auth, env, chapter.book_id)) {
+    return Response.json({ error: '只能删除自己书籍的章节' }, { status: 403 });
+  }
 
   await env.DB.prepare('DELETE FROM chapters WHERE id = ?').bind(params.id).run();
   await env.R2.delete(chapter.content_key).catch(() => {});

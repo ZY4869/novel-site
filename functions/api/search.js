@@ -26,7 +26,7 @@ export async function onRequestGet(context) {
 
   // 否则搜索书籍（书名 + 作者）
   const { results } = await env.DB.prepare(
-    `SELECT b.*, 
+    `SELECT b.id, b.title, b.author, b.description, b.cover_key, b.created_at, b.updated_at,
       (SELECT COUNT(*) FROM chapters WHERE book_id = b.id) as chapter_count,
       (SELECT COALESCE(SUM(word_count), 0) FROM chapters WHERE book_id = b.id) as total_words
      FROM books b 

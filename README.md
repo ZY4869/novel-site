@@ -1,11 +1,22 @@
 # 📚 Novel Site — 零成本私人小说站
 
+[![Stars](https://img.shields.io/github/stars/xingzihai/novel-site?style=flat-square)](https://github.com/xingzihai/novel-site/stargazers)
+[![License](https://img.shields.io/github/license/xingzihai/novel-site?style=flat-square)](LICENSE)
+[![Deploy](https://img.shields.io/badge/deploy-Cloudflare%20Pages-orange?style=flat-square)](https://pages.cloudflare.com)
+
 > Cloudflare Pages + D1 + R2 + Functions 全栈方案，全程不花一分钱
 
-一个完全运行在 Cloudflare 免费套餐上的私人小说阅读站。纯 HTML/CSS/JS，无框架依赖，部署简单，适合个人使用。
+## ✨ 亮点速览
 
-📖 **详细教程**：[零成本！用 Cloudflare 四件套搭建你的私人小说站](https://linux.do/t/topic/1638705)
-🌐 **在线演示**：[novel-site-6ba.pages.dev](https://novel-site-6ba.pages.dev)
+- 💰 **零成本** — 完全运行在 Cloudflare 免费套餐上，不需要服务器、域名、CDN
+- ⚡ **5 分钟部署** — 克隆仓库后几条命令即可上线
+- 📖 **功能完整** — 书架、阅读、搜索、书签、统计、TXT/EPUB 导入、多管理员、标签分类
+- 🔐 **安全加固** — PBKDF2 密码哈希、Session Token、IP 限流、CSP/HSTS 安全头
+- 🛠️ **纯原生** — 零框架依赖（无 React/Vue），纯 HTML/CSS/JS，改起来简单
+
+## 🌐 在线演示
+
+👉 [novel-site-6ba.pages.dev](https://novel-site-6ba.pages.dev)
 
 ## ✨ 功能特性
 
@@ -25,9 +36,12 @@
 - 📤 TXT 导出（单章/整本）
 - 🔍 书名/作者搜索 + 书内章节搜索
 - ✅ 批量操作：章节多选、批量删除
-- 📈 数据统计面板：总书籍/章节/字数一览
+- 📈 数据统计面板：站点 PV/UV、书籍阅读量、章节热度
 - 💾 数据备份与恢复：一键导出/导入全站 JSON
 - 🔤 自定义字体：上传 woff2 字体，阅读页可选用
+- 🏷️ 标签分类：给书籍打标签，按标签筛选
+- 🖼️ 封面管理：上传自定义封面图
+- 👥 多管理员：超级管理员 / 管理员 / 演示管理员三级权限
 
 **安全与架构**
 - 🔐 PBKDF2 密码哈希 + 随机 Session Token + IP 限流
@@ -50,31 +64,33 @@
                       └─────────┘
 ```
 
-- **Pages**：托管前端静态文件（HTML/CSS/JS）
-- **Functions**：后端 API（认证、CRUD、中间件）
-- **D1**：SQLite 数据库，存储书籍/章节元数据、用户、会话
-- **R2**：对象存储，存储章节正文内容
+- **Pages** — 托管前端静态文件（HTML/CSS/JS），自带全球 CDN
+- **Functions** — 后端 API（认证、CRUD、中间件），文件路径即 URL 路由
+- **D1** — SQLite 数据库，存储书籍/章节元数据、用户、会话、统计
+- **R2** — 对象存储，存储章节正文、封面图、自定义字体
 
-## 🚀 快速部署
+> 打个比方：D1 是图书馆的目录卡片（"《斗破苍穹》，天蚕土豆著，共1647章"），R2 是书架上的实体书（每一章的完整正文）。查书先翻目录（D1），再去书架取书（R2），各司其职。
 
-```bash
-git clone https://github.com/xingzihai/novel-site.git
-cd novel-site
+## 🚀 快速部署（5 分钟）
 
-wrangler login
-wrangler d1 create novel-db          # 记下 database_id，填入 wrangler.toml
-wrangler r2 bucket create novel-storage
-wrangler pages deploy .
-wrangler pages secret put ADMIN_PASSWORD --project-name novel-site
-wrangler d1 execute novel-db --file schema.sql --remote
-wrangler pages deploy .
-```
+👉 **懒人部署教程**：[LINUX DO 帖子](https://linux.do/t/topic/TODO)（从注册账号到部署上线，每一步都有说明）
 
-> 📖 **完整的手把手教程（含原理讲解）**：[零成本！用 Cloudflare 四件套搭建你的私人小说站，全程不花一分钱](https://linux.do/t/topic/1638705)
->
-> 从注册账号到部署上线，每一步都有截图和详细解释，小白也能跟着做完。
+简单来说就是：注册 CF 账号 → 装 Node.js 和 Wrangler → 克隆仓库 → 创建 D1 和 R2 → 改配置 → 部署。几条命令的事。
 
-## 📁 项目结构
+> ⚠️ R2 需要先绑定支付方式（PayPal 或外币信用卡）才能开通，**不会扣费**，只是身份验证。推荐用 PayPal，国内银行卡和手机号即可注册。
+
+## 📖 深入了解
+
+### 为什么用 D1 + R2 两个存储？
+
+直接全放数据库不行吗？可以，但不好。
+
+- **D1**（SQLite）擅长存结构化的小数据——书名、作者、章节标题、字数、创建时间。查询快，支持 SQL
+- **R2**（对象存储）擅长存大块非结构化数据——小说正文动辄几千上万字，放数据库里既浪费又慢
+
+读取章节时的流程：先从 D1 查章节元数据（拿到 `content_key`），再用这个 key 去 R2 取正文。写入章节时反过来：先在 D1 插入记录拿到自增 ID，拼出 R2 路径，上传正文到 R2，最后回写 `content_key` 到 D1。
+
+### 项目结构
 
 ```
 novel-site/
@@ -83,70 +99,189 @@ novel-site/
 ├── read.html               # 阅读页面（设置面板 + 快捷键）
 ├── admin.html              # 管理后台（统计 + 批量操作 + 字体管理）
 ├── 404.html                # 404 页面
-├── style.css               # 全局样式（5 主题）
+├── style.css               # 全局样式（5 主题 + 响应式）
 ├── schema.sql              # 数据库建表语句
 ├── wrangler.toml           # Cloudflare 配置
-├── setup.sh                # 一键部署脚本
 ├── migrations/             # 数据库迁移脚本
-│   └── 001_stats_and_roles.sql
+│   └── 001_stats_and_roles.sql  # 访问统计 + 多管理员角色
 └── functions/              # 后端 API
     ├── _middleware.js       # 公共中间件（安全头、CORS、错误处理）
     └── api/
-        ├── _utils.js       # 工具函数（认证、密码、校验）
-        ├── auth.js         # 认证 API（登录/登出/改密码）
-        ├── books.js        # 公开：书籍列表
-        ├── search.js       # 公开：搜索
-        ├── settings.js     # 公开：站点设置
-        ├── fonts.js        # 公开：自定义字体列表
+        ├── _utils.js       # 工具函数（认证、密码哈希、校验）
+        ├── auth.js         # 认证（登录/登出/改密码）
+        ├── books.js        # 书籍列表
+        ├── search.js       # 搜索
+        ├── settings.js     # 站点设置
+        ├── fonts.js        # 自定义字体列表
+        ├── tags.js         # 标签列表
         ├── books/
-        │   └── [id].js     # 公开：书籍详情+章节列表
+        │   └── [id].js     # 书籍详情 + 章节列表
         ├── chapters/
-        │   └── [id].js     # 公开：章节内容
+        │   └── [id].js     # 章节内容（D1 元数据 + R2 正文）
+        ├── covers/
+        │   └── [id].js     # 封面图 serve
         ├── fonts/
-        │   └── [name].js   # 公开：字体文件 serve
-        └── admin/
-            ├── books.js    # 管理：创建书籍
-            ├── settings.js # 管理：站点设置
-            ├── fonts.js    # 管理：字体上传/删除
+        │   └── [name].js   # 字体文件 serve
+        └── admin/          # 管理 API（需登录）
+            ├── books.js    # 创建书籍
+            ├── settings.js # 站点设置
+            ├── fonts.js    # 字体上传/删除
+            ├── tags.js     # 标签管理
+            ├── covers.js   # 封面上传
+            ├── stats.js    # 访问统计
+            ├── users.js    # 多管理员管理
+            ├── book-tags.js # 书籍标签关联
             ├── books/
-            │   └── [id].js # 管理：编辑/删除书籍
-            ├── chapters.js # 管理：创建章节
+            │   └── [id].js # 编辑/删除书籍
+            ├── chapters.js # 创建章节
             └── chapters/
-                ├── [id].js # 管理：编辑/删除章节
-                └── swap.js # 管理：章节排序
+                ├── [id].js # 编辑/删除章节
+                └── swap.js # 章节排序
 ```
 
-## 🔐 安全特性
+> `functions/` 目录是 Pages Functions 的约定——文件路径即 URL 路由。`functions/api/books.js` → `/api/books`，`functions/api/books/[id].js` → `/api/books/123`。以 `_` 开头的文件不会成为路由。
 
-- **密码存储**：PBKDF2（100,000 迭代 + 16 字节随机盐）
-- **会话管理**：32 字节 CSPRNG Token，数据库只存 SHA-256 哈希
-- **IP 保护**：登录 IP 以 SHA-256 哈希存储，5 次失败锁定 10 分钟
-- **安全头**：CSP、HSTS、X-Frame-Options、nosniff、Referrer-Policy
-- **CORS**：管理 API 不返回 CORS 头（仅同源访问）
-- **输入校验**：前后端双重验证，参数化 SQL 查询
+### 数据库设计
+
+完整建表语句见 `schema.sql`，核心表结构：
+
+```sql
+-- 书籍表：存元数据，正文不在这里
+CREATE TABLE IF NOT EXISTS books (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  author TEXT DEFAULT '',
+  cover_key TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
+-- 章节表：content_key 指向 R2 中的正文对象
+CREATE TABLE IF NOT EXISTS chapters (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  book_id INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  sort_order INTEGER NOT NULL,
+  word_count INTEGER DEFAULT 0,
+  content_key TEXT NOT NULL,        -- R2 路径，如 novels/books/1/chapters/42.txt
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (book_id) REFERENCES books(id)
+);
+
+-- 管理员账号：密码用 PBKDF2 哈希存储
+CREATE TABLE IF NOT EXISTS admin_users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  role TEXT DEFAULT 'editor',       -- super_admin 或 editor
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+```
+
+其他表：
+
+```
+admin_sessions  -- 登录会话（随机 token，7 天过期，数据库只存 SHA-256 哈希）
+site_settings   -- 站点配置（站名、简介、页脚）
+auth_attempts   -- 登录限流（IP 哈希 + 失败计数，5 次锁定 10 分钟）
+site_visits     -- 站点日 PV/UV
+daily_visitors  -- UV 去重辅助（IP 哈希集合）
+book_stats      -- 书籍日阅读量
+chapter_stats   -- 章节累计阅读量
+```
+
+关键设计决策：
+
+- **D1 + R2 分工**：章节正文存 R2（大块文本），元数据存 D1（结构化查询）。D1 的 `content_key` 字段指向 R2 中的对象路径（如 `novels/books/1/chapters/42.txt`）
+- **密码不存明文**：用 PBKDF2（100,000 次迭代 + 16 字节随机盐）哈希后存储
+- **Session Token 与密码解耦**：登录成功后生成 32 字节随机 token，数据库只存 SHA-256 哈希
+- **IP 以哈希存储**：`auth_attempts` 表中的 IP 用 SHA-256 哈希，不存原始 IP
+- **先 DB 后 R2**：创建章节时先插 D1 拿到自增 ID，再拼 R2 路径上传正文，最后回写 `content_key`
+
+### 安全设计
+
+**中间件（`functions/_middleware.js`）**
+
+所有请求的"安全门卫"，负责：
+- CORS 控制：公开 API 允许跨域（`*`），管理 API 不返回 CORS 头（仅同源访问）
+- 请求大小限制：超过 10MB 直接拒绝（HTTP 413）
+- 错误兜底：后端异常返回 500，不暴露错误详情
+- 安全响应头：
+
+| 头 | 作用 |
+|---|---|
+| `Content-Security-Policy` | 限制资源加载来源，防 XSS |
+| `Strict-Transport-Security` | 强制 HTTPS |
+| `X-Frame-Options: DENY` | 防点击劫持 |
+| `X-Content-Type-Options: nosniff` | 防 MIME 嗅探 |
+| `Referrer-Policy` | 控制 Referer 泄露 |
+| `Permissions-Policy` | 禁用摄像头/麦克风/定位 |
+
+**认证流程**
+
+1. 用户提交密码 → PBKDF2 哈希后与数据库比对
+2. 验证通过 → 生成 32 字节随机 Session Token → SHA-256 哈希后存入 `admin_sessions`
+3. 后续请求带 `Authorization: Bearer <token>` → 哈希后查表验证
+4. 首次登录自动创建管理员账号（密码来自环境变量 `ADMIN_PASSWORD`）
+5. 同一 IP 连续 5 次登录失败 → 锁定 10 分钟
+
+> 前端 token 存在 `sessionStorage`（关闭标签页自动清除），比 `localStorage` 更安全。
+
+**前端防护**
+
+- 正文用 `textContent` 渲染（不是 `innerHTML`），防 XSS
+- 所有用户输入渲染前 `escapeHtml()` 转义
+- 所有 SQL 查询使用参数化绑定，防注入
+- 正文换行用 CSS `white-space: pre-wrap` 处理
+
+### 前端设计要点
+
+- **零框架**：纯 HTML/CSS/JS，不需要构建步骤，改完刷新即可
+- **阅读区宽度**：最大 800px，一行不超过 40 个汉字，避免眼睛跟丢
+- **正文字体**：衬线体（Noto Serif SC），行高 1.8 倍，长文阅读最佳实践
+- **书架布局**：CSS Grid 自适应，手机一列、平板两列、电脑三列
+- **主题系统**：5 种主题通过 CSS 变量切换，用户偏好存 `localStorage`
 
 ## 📊 Cloudflare 免费额度
 
-| 服务 | 免费额度 | 本项目用量 |
-|------|---------|-----------|
-| Pages | 无限站点，500 次构建/月 | 1 站点 |
-| Functions | 10 万次请求/天 | 远低于限制 |
-| D1 | 5GB 存储，500 万行读/天 | 极少 |
-| R2 | 10GB 存储，1000 万次读/月 | 取决于小说数量 |
+| 服务 | 免费额度 | 小说站实际用量 | 够用吗 |
+|------|---------|--------------|--------|
+| Pages 请求 | 无限 | 随便用 | ✅ |
+| Functions 请求 | 10 万次/天 | 每次翻页 1 次，日读 1000 页才 1000 次 | ✅ |
+| D1 读取 | 500 万次/天 | 每个 API 调 1-3 次查询 | ✅ |
+| D1 写入 | 10 万次/天 | 只有管理员添加章节才写 | ✅ |
+| D1 存储 | 5GB | 纯文本元数据，1 万本书用不到 100MB | ✅ |
+| R2 存储 | 10GB | 一本 50 万字约 1MB，能存 1 万本 | ✅ |
+| R2 读取 | 1000 万次/月 | 每次阅读读 1 次 R2 | ✅ |
+| R2 写入 | 100 万次/月 | 只有添加章节才写 | ✅ |
 
-> 个人使用完全够用，即使存几百本小说也不会超出免费额度。
+> 个人使用完全够用，即使存几百本小说也不会超出免费额度。除非日活过万，否则免费额度根本用不完。
 
 ## 🛠️ 本地开发
 
 ```bash
-# 创建本地 D1 和 R2（自动）
 wrangler pages dev . --port 3355 \
   --d1 DB=<your-database-id> \
   --r2 R2=novel-storage \
   --binding ADMIN_PASSWORD=your_password
 ```
 
+本地开发服务器模拟完整的 Pages + Functions + D1 + R2 环境。本地数据与云端隔离。
+
 首次访问 `/admin.html`，用 `admin` / 你设置的密码登录。
+
+### 数据库迁移
+
+项目使用 `migrations/` 目录管理数据库变更。如果你从早期版本升级，需要执行迁移脚本：
+
+```bash
+wrangler d1 execute novel-db --file migrations/001_stats_and_roles.sql --remote
+```
+
+新部署不需要手动执行迁移，`schema.sql` 已包含所有表结构。
 
 ## 📝 使用说明
 
@@ -162,6 +297,35 @@ wrangler pages dev . --port 3355 \
 - `序章`、`楔子`、`番外`、`终章`、`大结局` 等
 - 支持 UTF-8、GBK、UTF-16 编码自动检测
 
+导入前可预览识别结果，支持手动编辑章节拆分。
+
+### 数据备份
+
+管理后台支持一键导出全站数据为 JSON 文件，包含所有书籍、章节、设置。可在新站点一键导入恢复。
+
+## 🔮 扩展思路
+
+这套架构（Pages + Functions + D1 + R2）是通用的全栈方案，可以在此基础上扩展：
+
+- **自定义域名** — CF Pages 支持绑定域名，在 Dashboard → Pages → Custom domains 添加，SSL 自动配置
+- **Markdown 渲染** — 引入轻量 Markdown 库（如 marked.js），让正文支持富文本格式（注意做好 XSS 过滤）
+- **EPUB 导入** — 解析 EPUB 格式电子书，自动提取章节和元数据
+- **阅读进度同步** — 当前进度存在 `localStorage`，可以扩展为服务端存储，实现跨设备同步
+- **全文搜索** — D1 支持 `LIKE` 查询，可在 D1 额外存一份正文摘要用于搜索
+- **其他应用** — 同样的架构可以搭博客（文章存 R2）、图床（图片存 R2）、网盘（文件存 R2）等任何需要"数据库 + 文件存储"的小项目
+
+> CF 的免费套餐就是个人开发者的福音。以后每次修改代码，只需要再跑一次 `wrangler pages deploy .` 就能更新线上版本。CF Pages 会自动保留历史版本，搞砸了可以一键回滚。
+
+## 📈 Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=xingzihai/novel-site&type=Date)](https://star-history.com/#xingzihai/novel-site&Date)
+
 ## 📄 License
 
-AGPL-3.0
+[AGPL-3.0](LICENSE)
+
+## 🤝 致谢与贡献
+
+本项目首发于 LINUX DO 社区。
+
+欢迎提 [Issue](https://github.com/xingzihai/novel-site/issues) 和 [Pull Request](https://github.com/xingzihai/novel-site/pulls)！无论是 bug 反馈、功能建议还是代码贡献，都非常感谢。
