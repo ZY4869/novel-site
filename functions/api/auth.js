@@ -112,8 +112,11 @@ export async function onRequestGet(context) {
     crypto.getRandomValues(stateBytes);
     const state = [...stateBytes].map(b => b.toString(16).padStart(2, '0')).join('');
 
-    // HMAC 签名 state，用 ADMIN_PASSWORD 作为独立密钥（不复用 client_secret）
-    const hmacKey = env.ADMIN_PASSWORD || clientSecret;
+    // HMAC 签名 state，用 ADMIN_PASSWORD 作为独立密钥
+    if (!env.ADMIN_PASSWORD) {
+      return Response.json({ error: 'ADMIN_PASSWORD 未配置，无法启用 GitHub 登录' }, { status: 500 });
+    }
+    const hmacKey = env.ADMIN_PASSWORD;
     const signature = await hmacSign(state, hmacKey);
     const cookie = `__Host-github_oauth_state=${state}.${signature}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`;
 

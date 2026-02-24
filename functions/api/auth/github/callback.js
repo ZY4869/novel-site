@@ -55,8 +55,11 @@ export async function onRequestGet(context) {
     });
   }
 
-  // HMAC 验证用独立密钥（ADMIN_PASSWORD），不复用 client_secret
-  const hmacKey = env.ADMIN_PASSWORD || clientSecret;
+  // HMAC 验证用 ADMIN_PASSWORD（不 fallback 到 client_secret）
+  if (!env.ADMIN_PASSWORD) {
+    return new Response('Server misconfigured: ADMIN_PASSWORD not set', { status: 500 });
+  }
+  const hmacKey = env.ADMIN_PASSWORD;
   const valid = await hmacVerify(stateValue, signature, hmacKey);
   if (!valid) {
     return new Response('State signature invalid', { status: 403 });

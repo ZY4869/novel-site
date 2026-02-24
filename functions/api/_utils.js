@@ -62,44 +62,48 @@ let _schemaEnsured = false;
 
 async function ensureSchema(env) {
   if (_schemaEnsured) return;
-  _schemaEnsured = true;
   try {
-    await env.DB.prepare('ALTER TABLE admin_users ADD COLUMN password_locked INTEGER DEFAULT 0').run();
-  } catch {
-    // 列已存在，静默忽略
+    try {
+      await env.DB.prepare('ALTER TABLE admin_users ADD COLUMN password_locked INTEGER DEFAULT 0').run();
+    } catch {}
+    // 书籍所有者
+    try {
+      await env.DB.prepare('ALTER TABLE books ADD COLUMN created_by INTEGER DEFAULT NULL').run();
+    } catch {}
+    // 书籍封面
+    try {
+      await env.DB.prepare('ALTER TABLE books ADD COLUMN cover_key TEXT DEFAULT NULL').run();
+    } catch {}
+    // 标签系统
+    try {
+      await env.DB.prepare('CREATE TABLE IF NOT EXISTS tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, color TEXT DEFAULT \'#888\')').run();
+    } catch {}
+    try {
+      await env.DB.prepare('CREATE TABLE IF NOT EXISTS book_tags (book_id INTEGER, tag_id INTEGER, PRIMARY KEY (book_id, tag_id))').run();
+    } catch {}
+    // GitHub OAuth
+    try {
+      await env.DB.prepare('ALTER TABLE admin_users ADD COLUMN github_id INTEGER DEFAULT NULL').run();
+    } catch {}
+    try {
+      await env.DB.prepare('ALTER TABLE admin_users ADD COLUMN github_login TEXT DEFAULT NULL').run();
+    } catch {}
+    try {
+      await env.DB.prepare('ALTER TABLE admin_users ADD COLUMN avatar_url TEXT DEFAULT NULL').run();
+    } catch {}
+    try {
+      await env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_users_github_id ON admin_users(github_id) WHERE github_id IS NOT NULL').run();
+    } catch {}
+    // 章节乐观锁版本号
+    try {
+      await env.DB.prepare('ALTER TABLE chapters ADD COLUMN version INTEGER DEFAULT 0').run();
+    } catch {}
+    // 所有迁移成功完成，标记为已完成
+    _schemaEnsured = true;
+  } catch (e) {
+    // DB不可用等严重错误，不设标志，下次请求重试
+    console.error('ensureSchema failed:', e);
   }
-  // 书籍所有者
-  try {
-    await env.DB.prepare('ALTER TABLE books ADD COLUMN created_by INTEGER DEFAULT NULL').run();
-  } catch {}
-  // 书籍封面
-  try {
-    await env.DB.prepare('ALTER TABLE books ADD COLUMN cover_key TEXT DEFAULT NULL').run();
-  } catch {}
-  // 标签系统
-  try {
-    await env.DB.prepare('CREATE TABLE IF NOT EXISTS tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, color TEXT DEFAULT \'#888\')').run();
-  } catch {}
-  try {
-    await env.DB.prepare('CREATE TABLE IF NOT EXISTS book_tags (book_id INTEGER, tag_id INTEGER, PRIMARY KEY (book_id, tag_id))').run();
-  } catch {}
-  // GitHub OAuth
-  try {
-    await env.DB.prepare('ALTER TABLE admin_users ADD COLUMN github_id INTEGER DEFAULT NULL').run();
-  } catch {}
-  try {
-    await env.DB.prepare('ALTER TABLE admin_users ADD COLUMN github_login TEXT DEFAULT NULL').run();
-  } catch {}
-  try {
-    await env.DB.prepare('ALTER TABLE admin_users ADD COLUMN avatar_url TEXT DEFAULT NULL').run();
-  } catch {}
-  try {
-    await env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_users_github_id ON admin_users(github_id) WHERE github_id IS NOT NULL').run();
-  } catch {}
-  // 章节乐观锁版本号
-  try {
-    await env.DB.prepare('ALTER TABLE chapters ADD COLUMN version INTEGER DEFAULT 0').run();
-  } catch {}
 }
 
 // ===== 默认管理员（拒绝无密码创建） =====
@@ -203,6 +207,7 @@ export async function login(env, username, password, ip) {
   }
 
   await clearFailedAttempts(env, ipHash);
+  await clearFailedAttempts(env, usernameHash);
 
   // token明文返回客户端，DB只存哈希
   const token = generateToken();
