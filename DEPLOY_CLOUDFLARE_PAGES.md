@@ -191,7 +191,14 @@ wrangler d1 execute novel-db --file schema.sql --remote
 ### 7.2 方法 B：在 D1 控制台执行
 1. Cloudflare Dashboard → Workers & Pages → D1 → 选择你的数据库
 2. 打开 Console（SQL 执行界面）
-3. 把 `schema.sql` 内容粘贴进去执行
+3. 执行 `schema.sql` 建表语句
+
+> ⚠️ 注意：部分 D1 控制台是“单行输入”（会把你粘贴的内容折叠成一行）。如果你直接粘贴包含很多 `--` 注释的 `schema.sql`，可能会导致注释把后面的 SQL 全部吞掉，从而报错：  
+> `The request is malformed: Requests without any query are not supported.`
+>
+> 解决方法（任选其一）：
+> - 避免使用 `--` 行注释（建议改成 `/* ... */` 或直接删除注释）
+> - 本仓库当前的 `schema.sql` 已使用 `/* ... */` 注释格式，通常可以整段粘贴执行；若控制台提示“一次只能执行一条语句”，就把 `schema.sql` 里的每条 `CREATE ...;` / `INSERT ...;` **逐条复制**到控制台执行（最稳）
 
 ### 7.3 migrations 什么时候需要跑？
 `migrations/` 目录用于“老版本数据库升级”。**新建数据库且已执行 `schema.sql` 的情况下，一般不需要再执行迁移文件。**
