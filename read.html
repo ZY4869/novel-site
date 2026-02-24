@@ -133,6 +133,13 @@
     }
 
     let settings = loadSettings();
+
+    // ===== 翻页模式变量（需在 applyAllSettings 之前声明）=====
+    let pagerState = { currentPage: 0, totalPages: 1, columnWidth: 0 };
+    const pagerTapLeft = document.getElementById('pager-tap-left');
+    const pagerTapRight = document.getElementById('pager-tap-right');
+    const pagerIndicator = document.getElementById('pager-indicator');
+
     applyAllSettings();
 
     function applyAllSettings() {
@@ -266,10 +273,6 @@
     });
 
     // ===== 翻页模式引擎 =====
-    let pagerState = { currentPage: 0, totalPages: 1, columnWidth: 0 };
-    const pagerTapLeft = document.getElementById('pager-tap-left');
-    const pagerTapRight = document.getElementById('pager-tap-right');
-    const pagerIndicator = document.getElementById('pager-indicator');
 
     function applyReadingMode() {
       const isPager = settings.readingMode === 'pager';
