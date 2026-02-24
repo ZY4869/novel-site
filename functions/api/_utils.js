@@ -96,6 +96,10 @@ async function ensureSchema(env) {
   try {
     await env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_users_github_id ON admin_users(github_id) WHERE github_id IS NOT NULL').run();
   } catch {}
+  // 章节乐观锁版本号
+  try {
+    await env.DB.prepare('ALTER TABLE chapters ADD COLUMN version INTEGER DEFAULT 0').run();
+  } catch {}
 }
 
 // ===== 默认管理员（拒绝无密码创建） =====
@@ -346,4 +350,11 @@ export async function createSession(env, userId) {
     "DELETE FROM admin_sessions WHERE user_id = ? AND token NOT IN (SELECT token FROM admin_sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 10)"
   ).bind(userId, userId).run().catch(() => {});
   return { token, expiresAt };
+}
+
+// GitHub OAuth secret：优先环境变量（更安全），fallback到DB
+export async function getGitHubClientSecret(env) {
+  if (env.GITHUB_CLIENT_SECRET) return env.GITHUB_CLIENT_SECRET;
+  const row = await env.DB.prepare("SELECT value FROM site_settings WHERE key = 'github_client_secret'").first();
+  return row?.value || null;
 }

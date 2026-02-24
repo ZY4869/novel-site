@@ -88,6 +88,7 @@
           <span>当前用户：<strong id="current-user"></strong></span>
           <a href="#" onclick="showChangePassword();return false" style="font-size:13px">修改密码</a>
           <a href="#" onclick="doLogout();return false" style="font-size:13px;color:var(--danger,#e74c3c)">退出登录</a>
+          <a href="#" id="deactivate-account-btn" onclick="deactivateAccount();return false" style="display:none;font-size:13px;color:var(--danger,#e74c3c)">注销账号</a>
         </div>
         <div id="pwd-form" style="display:none">
           <div class="form-group">
@@ -546,6 +547,9 @@
       // demo限制：隐藏EPUB导入和删除书籍
       const demoHideEls = document.querySelectorAll('.hide-for-demo');
       demoHideEls.forEach(el => el.style.display = role === 'demo' ? 'none' : '');
+      // demo用户显示注销按钮
+      const deactivateBtn = document.getElementById('deactivate-account-btn');
+      if (deactivateBtn) deactivateBtn.style.display = role === 'demo' ? '' : 'none';
       refreshAllBooks(); loadSettings(); loadStats(); loadFontList();
       if (role === 'super_admin') { loadAdminUsers(); loadGitHubConfig(); }
     }
@@ -562,6 +566,18 @@
       document.getElementById('admin-panel').style.display = 'none';
       document.getElementById('user-info').style.display = 'none';
       document.getElementById('login-pass').value = '';
+    }
+
+    async function deactivateAccount() {
+      if (!confirm('⚠️ 确定要注销账号吗？\n\n• 您创建的书籍和章节将转交给管理员保管\n• 此操作不可恢复！')) return;
+      if (!confirm('再次确认：注销后无法恢复，确定继续？')) return;
+      try {
+        const res = await fetch('/api/admin/account', { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + authToken, 'Content-Type': 'application/json' } });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        alert('账号已注销。感谢使用！');
+        doLogout();
+      } catch (e) { alert('注销失败：' + e.message); }
     }
 
     function showChangePassword() {
@@ -1909,7 +1925,13 @@
       await concurrentUpload(tasks, 3);
 
       if (errors.length > 0) {
-        showMsg('epub-msg', `导入完成，${errors.length} 章失败：${errors.slice(0, 3).join('；')}`, 'error');
+        // 如果是新建书且全部章节都失败，自动删除空书
+        if (mode === 'new' && errors.length === chapters.length) {
+          try { await api('DELETE', '/api/admin/books/' + bookId); } catch {}
+          showMsg('epub-msg', `导入全部失败，已自动删除空书。失败原因：\n${errors.join('\n')}`, 'error');
+        } else {
+          showMsg('epub-msg', `导入完成，${errors.length} 章失败：\n${errors.join('\n')}`, 'error');
+        }
       } else {
         showMsg('epub-msg', `成功导入 ${uploaded} 章`, 'success');
       }

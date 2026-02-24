@@ -80,8 +80,15 @@ export async function onRequestPost(context) {
   }
 
   // 更新content_key为最终值
-  await env.DB.prepare('UPDATE chapters SET content_key = ? WHERE id = ?')
-    .bind(contentKey, chapterId).run();
+  try {
+    await env.DB.prepare('UPDATE chapters SET content_key = ? WHERE id = ?')
+      .bind(contentKey, chapterId).run();
+  } catch (err) {
+    // content_key更新失败，回滚DB和R2
+    await env.DB.prepare('DELETE FROM chapters WHERE id = ?').bind(chapterId).run().catch(() => {});
+    await env.R2.delete(contentKey).catch(() => {});
+    return Response.json({ error: 'Failed to finalize chapter' }, { status: 500 });
+  }
 
   await env.DB.prepare("UPDATE books SET updated_at = datetime('now') WHERE id = ?")
     .bind(book_id).run();

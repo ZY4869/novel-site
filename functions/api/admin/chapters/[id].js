@@ -31,7 +31,15 @@ export async function onRequestPut(context) {
   const body = await parseJsonBody(request);
   if (!body) return Response.json({ error: 'Invalid JSON' }, { status: 400 });
 
-  const { title, content } = body;
+  const { title, content, version } = body;
+
+  // 乐观锁：如果前端传了version，检查是否匹配
+  if (version !== undefined) {
+    const currentVersion = chapter.version || 0;
+    if (Number(version) !== currentVersion) {
+      return Response.json({ error: '内容已被其他人修改，请刷新后重试' }, { status: 409 });
+    }
+  }
 
   if (title && typeof title === 'string' && title.trim().length > 0) {
     if (title.length > 200) return Response.json({ error: 'Title too long' }, { status: 400 });
@@ -44,11 +52,18 @@ export async function onRequestPut(context) {
       return Response.json({ error: `Content too long (max ${MAX_CONTENT_LENGTH} chars)` }, { status: 400 });
     }
     const wordCount = content.trim().length;
+    // 先更新DB（可回滚），再写R2（不可回滚）
+    const newVersion = (chapter.version || 0) + 1;
     try {
+      await env.DB.prepare(
+        "UPDATE chapters SET word_count = ?, version = ?, updated_at = datetime('now') WHERE id = ?"
+      ).bind(wordCount, newVersion, params.id).run();
       await env.R2.put(chapter.content_key, content.trim());
-      await env.DB.prepare("UPDATE chapters SET word_count = ?, updated_at = datetime('now') WHERE id = ?")
-        .bind(wordCount, params.id).run();
-    } catch {
+    } catch (err) {
+      // 如果R2失败，回滚DB的word_count和version
+      await env.DB.prepare(
+        "UPDATE chapters SET word_count = ?, version = ?, updated_at = ? WHERE id = ?"
+      ).bind(chapter.word_count, chapter.version || 0, chapter.updated_at, params.id).run().catch(() => {});
       return Response.json({ error: 'Failed to update content' }, { status: 500 });
     }
   }
@@ -56,7 +71,9 @@ export async function onRequestPut(context) {
   await env.DB.prepare("UPDATE books SET updated_at = datetime('now') WHERE id = ?")
     .bind(chapter.book_id).run();
 
-  return Response.json({ success: true });
+  // 返回新version供前端下次编辑使用
+  const newChapter = await env.DB.prepare('SELECT version FROM chapters WHERE id = ?').bind(params.id).first();
+  return Response.json({ success: true, version: newChapter?.version || 0 });
 }
 
 export async function onRequestDelete(context) {

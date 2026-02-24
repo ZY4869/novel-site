@@ -27,6 +27,18 @@ export async function onRequest(context) {
     return Response.json({ error: 'Request too large' }, { status: 413 });
   }
 
+  // CSRF防护：admin/auth API的写操作必须携带正确的Content-Type
+  // 简单请求（form提交）无法设置application/json，因此可阻止跨站POST
+  const method = context.request.method;
+  if (isAdminApi && ['POST', 'PUT', 'DELETE'].includes(method)) {
+    const ct = context.request.headers.get('Content-Type') || '';
+    // 允许 application/json 和 multipart/form-data（封面/字体上传）
+    // GitHub OAuth callback 是 GET 不受影响
+    if (!ct.startsWith('application/json') && !ct.startsWith('multipart/form-data')) {
+      return Response.json({ error: 'Invalid Content-Type' }, { status: 415 });
+    }
+  }
+
   try {
     const response = await context.next();
 
@@ -94,6 +106,11 @@ async function trackVisit(env, request) {
     if (Math.random() < 0.1) {
       const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
       await env.DB.prepare("DELETE FROM daily_visitors WHERE date < ?").bind(weekAgo).run();
+    }
+    // 1%概率清理90天前的book_stats（防DB膨胀）
+    if (Math.random() < 0.01) {
+      const ninetyDaysAgo = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+      await env.DB.prepare("DELETE FROM book_stats WHERE date < ?").bind(ninetyDaysAgo).run();
     }
   } catch (e) {
     console.error('Track visit error:', e);

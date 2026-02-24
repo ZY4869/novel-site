@@ -70,7 +70,9 @@ export async function onRequestDelete(context) {
   if (!body || !body.id) return Response.json({ error: 'Tag id required' }, { status: 400 });
   if (!validateId(String(body.id))) return Response.json({ error: 'Invalid tag id' }, { status: 400 });
 
-  await env.DB.prepare('DELETE FROM book_tags WHERE tag_id = ?').bind(body.id).run();
-  await env.DB.prepare('DELETE FROM tags WHERE id = ?').bind(body.id).run();
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM book_tags WHERE tag_id = ?').bind(body.id),
+    env.DB.prepare('DELETE FROM tags WHERE id = ?').bind(body.id),
+  ]);
   return Response.json({ success: true });
 }

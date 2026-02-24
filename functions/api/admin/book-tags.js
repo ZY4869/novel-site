@@ -24,11 +24,14 @@ export async function onRequestPut(context) {
     return Response.json({ error: '只能管理自己书籍的标签' }, { status: 403 });
   }
 
-  await env.DB.prepare('DELETE FROM book_tags WHERE book_id = ?').bind(bookId).run();
-
-  for (const tagId of body.tag_ids) {
-    await env.DB.prepare('INSERT OR IGNORE INTO book_tags (book_id, tag_id) VALUES (?, ?)').bind(bookId, tagId).run();
-  }
+  // 原子操作：先删后插
+  const stmts = [
+    env.DB.prepare('DELETE FROM book_tags WHERE book_id = ?').bind(bookId),
+    ...body.tag_ids.map(tagId =>
+      env.DB.prepare('INSERT OR IGNORE INTO book_tags (book_id, tag_id) VALUES (?, ?)').bind(bookId, tagId)
+    ),
+  ];
+  await env.DB.batch(stmts);
 
   return Response.json({ success: true });
 }

@@ -1,7 +1,32 @@
 // GET /api/search?q=keyword&book_id=1 — 搜索书籍或章节内容
+// 简单内存速率限制（每个isolate实例独立，CF Workers会自动分配）
+const searchRateMap = new Map();
+const SEARCH_RATE_LIMIT = 30; // 每分钟每IP最多30次搜索
+const SEARCH_RATE_WINDOW = 60000; // 1分钟窗口
+
 export async function onRequestGet(context) {
   const { env, request } = context;
   const url = new URL(request.url);
+
+  // IP速率限制
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const now = Date.now();
+  const entry = searchRateMap.get(ip);
+  if (entry && now - entry.start < SEARCH_RATE_WINDOW) {
+    if (entry.count >= SEARCH_RATE_LIMIT) {
+      return Response.json({ error: '搜索过于频繁，请稍后再试' }, { status: 429 });
+    }
+    entry.count++;
+  } else {
+    searchRateMap.set(ip, { start: now, count: 1 });
+  }
+  // 定期清理过期条目（防内存泄漏）
+  if (searchRateMap.size > 1000) {
+    for (const [k, v] of searchRateMap) {
+      if (now - v.start > SEARCH_RATE_WINDOW) searchRateMap.delete(k);
+    }
+  }
+
   const q = (url.searchParams.get('q') || '').trim();
   const bookId = url.searchParams.get('book_id');
 

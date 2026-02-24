@@ -2,7 +2,7 @@
 // POST /api/auth/logout — 登出
 // POST /api/auth/password — 修改密码
 // GET /api/auth/me — 验证当前session
-import { login, checkAdmin, changePassword, parseJsonBody, sha256Hash, hmacSign } from './_utils.js';
+import { login, checkAdmin, changePassword, parseJsonBody, sha256Hash, hmacSign, getGitHubClientSecret } from './_utils.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -102,8 +102,8 @@ export async function onRequestGet(context) {
       return Response.json({ error: 'GitHub 登录未启用' }, { status: 400 });
     }
     const clientIdRow = await env.DB.prepare("SELECT value FROM site_settings WHERE key = 'github_client_id'").first();
-    const clientSecretRow = await env.DB.prepare("SELECT value FROM site_settings WHERE key = 'github_client_secret'").first();
-    if (!clientIdRow?.value || !clientSecretRow?.value) {
+    const clientSecret = await getGitHubClientSecret(env);
+    if (!clientIdRow?.value || !clientSecret) {
       return Response.json({ error: 'GitHub OAuth 未配置' }, { status: 500 });
     }
 
@@ -113,7 +113,7 @@ export async function onRequestGet(context) {
     const state = [...stateBytes].map(b => b.toString(16).padStart(2, '0')).join('');
 
     // HMAC 签名 state，用 ADMIN_PASSWORD 作为独立密钥（不复用 client_secret）
-    const hmacKey = env.ADMIN_PASSWORD || clientSecretRow.value;
+    const hmacKey = env.ADMIN_PASSWORD || clientSecret;
     const signature = await hmacSign(state, hmacKey);
     const cookie = `__Host-github_oauth_state=${state}.${signature}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`;
 

@@ -5,14 +5,22 @@ export async function onRequestGet(context) {
   // 管理员请求（带token）返回 created_by 用于前端 ownership 判断
   const isAdmin = request.headers.get('Authorization')?.startsWith('Bearer ');
 
+  // 始终查询 created_by，在非管理员响应中过滤掉
   const { results } = await env.DB.prepare(`
     SELECT b.id, b.title, b.author, b.description, b.cover_key, b.created_at, b.updated_at,
-      ${isAdmin ? 'b.created_by,' : ''}
+      b.created_by,
       (SELECT COUNT(*) FROM chapters WHERE book_id = b.id) as chapter_count,
       (SELECT COALESCE(SUM(word_count), 0) FROM chapters WHERE book_id = b.id) as total_words
     FROM books b
     ORDER BY b.updated_at DESC
   `).all();
+
+  // 非管理员请求不返回 created_by
+  if (!isAdmin) {
+    for (const book of results) {
+      delete book.created_by;
+    }
+  }
 
   // 批量获取所有书籍的标签
   let allBookTags = [];

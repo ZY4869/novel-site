@@ -60,14 +60,13 @@ export async function onRequestDelete(context) {
       return Response.json({ error: '无效的文件名' }, { status: 400 });
     }
 
-    // 从R2删除
-    await env.R2.delete(`fonts/${filename}`);
-
-    // 更新字体列表
+    // 先更新DB列表（可回滚），再删R2文件（孤儿无害）
     const fonts = await getFontList(env);
     const idx = fonts.indexOf(filename);
     if (idx >= 0) fonts.splice(idx, 1);
     await saveFontList(env, fonts);
+
+    await env.R2.delete(`fonts/${filename}`).catch(() => {});
 
     return Response.json({ success: true });
   } catch (e) {

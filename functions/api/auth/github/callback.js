@@ -1,5 +1,5 @@
 // GET /api/auth/github/callback — GitHub OAuth 回调
-import { hmacVerify, sha256Hash, createSession } from '../../_utils.js';
+import { hmacVerify, sha256Hash, createSession, getGitHubClientSecret } from '../../_utils.js';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -46,9 +46,9 @@ export async function onRequestGet(context) {
     return new Response('State expired', { status: 403 });
   }
 
-  // 从 DB 读取 client_secret 用于验证 HMAC
-  const clientSecretRow = await env.DB.prepare("SELECT value FROM site_settings WHERE key = 'github_client_secret'").first();
-  if (!clientSecretRow?.value) {
+  // 读取 client_secret（优先环境变量，fallback到DB）
+  const clientSecret = await getGitHubClientSecret(env);
+  if (!clientSecret) {
     return new Response(null, {
       status: 302,
       headers: { 'Location': '/admin.html#github_error=oauth_not_configured' }
@@ -56,13 +56,13 @@ export async function onRequestGet(context) {
   }
 
   // HMAC 验证用独立密钥（ADMIN_PASSWORD），不复用 client_secret
-  const hmacKey = env.ADMIN_PASSWORD || clientSecretRow.value;
+  const hmacKey = env.ADMIN_PASSWORD || clientSecret;
   const valid = await hmacVerify(stateValue, signature, hmacKey);
   if (!valid) {
     return new Response('State signature invalid', { status: 403 });
   }
 
-  // 2. 从 DB 读取 GitHub OAuth 配置（client_secret 已在上面读取）
+  // 2. 从 DB 读取 GitHub OAuth 配置
   const clientIdRow = await env.DB.prepare("SELECT value FROM site_settings WHERE key = 'github_client_id'").first();
   if (!clientIdRow?.value) {
     return new Response(null, {
@@ -80,7 +80,7 @@ export async function onRequestGet(context) {
     },
     body: JSON.stringify({
       client_id: clientIdRow.value,
-      client_secret: clientSecretRow.value,
+      client_secret: clientSecret,
       code,
     }),
   });
