@@ -266,6 +266,10 @@
           <label>简介</label>
           <textarea id="book-desc" placeholder="输入书籍简介" style="min-height:80px" maxlength="2000"></textarea>
         </div>
+        <div class="form-group">
+          <label>标签</label>
+          <div id="create-book-tags" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+        </div>
         <button class="btn" onclick="createBook()">创建书籍</button>
         <div id="book-msg"></div>
       </div>
@@ -274,24 +278,6 @@
       <div class="admin-section">
         <h3>📚 书籍管理</h3>
         <ul class="admin-list" id="book-list"><li class="loading">加载中...</li></ul>
-      </div>
-
-      <!-- 标签管理 -->
-      <div class="admin-section">
-        <h3>🏷️ 标签管理</h3>
-        <div id="tag-create-area" style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:end">
-          <div>
-            <label style="font-size:12px;color:var(--text-light)">标签名</label>
-            <input type="text" id="tag-name" placeholder="标签名称" maxlength="30" style="width:140px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text)">
-          </div>
-          <div>
-            <label style="font-size:12px;color:var(--text-light)">颜色</label>
-            <input type="color" id="tag-color" value="#3498db" style="width:40px;height:32px;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;padding:2px">
-          </div>
-          <button class="btn" id="create-tag-btn">创建标签</button>
-        </div>
-        <ul class="admin-list" id="tag-list"><li style="color:var(--text-light)">加载中...</li></ul>
-        <div id="tag-msg"></div>
       </div>
 
       <!-- 书籍编辑弹窗 -->
@@ -326,6 +312,11 @@
           <div class="form-group">
             <label>标签</label>
             <div id="edit-book-tags" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+            <div id="edit-tag-actions" style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+              <input type="text" id="inline-tag-name" placeholder="新标签名" maxlength="30" style="width:100px;padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text);font-size:13px">
+              <input type="color" id="inline-tag-color" value="#3498db" style="width:30px;height:26px;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;padding:1px">
+              <button class="btn btn-sm" id="inline-create-tag-btn">+ 新标签</button>
+            </div>
           </div>
           <button class="btn" id="save-book-edit-btn">保存</button>
         </div>
@@ -550,9 +541,6 @@
       // demo用户显示注销按钮
       const deactivateBtn = document.getElementById('deactivate-account-btn');
       if (deactivateBtn) deactivateBtn.style.display = role === 'demo' ? '' : 'none';
-      // demo用户隐藏标签创建区域（但可以在书籍编辑弹窗中给自己的书选标签）
-      const tagCreateArea = document.getElementById('tag-create-area');
-      if (tagCreateArea) tagCreateArea.style.display = role === 'demo' ? 'none' : '';
       refreshAllBooks(); loadSettings(); loadStats(); loadFontList();
       if (role === 'super_admin') { loadAdminUsers(); loadGitHubConfig(); }
     }
@@ -961,10 +949,16 @@
         const res=await api('POST','/api/admin/books',{title,author,description});
         const data=await res.json();
         if (!res.ok) throw new Error(data.error);
+        // 保存标签
+        if (_createBookTags.length > 0 && data.book && data.book.id) {
+          await api('PUT', '/api/admin/book-tags', { book_id: data.book.id, tag_ids: _createBookTags }).catch(() => {});
+        }
         showMsg('book-msg',`创建成功：${esc(data.book.title)}`,'success');
         document.getElementById('book-title').value='';
         document.getElementById('book-author').value='';
         document.getElementById('book-desc').value='';
+        _createBookTags = [];
+        renderCreateBookTags();
         refreshAllBooks();
       } catch(e) { showMsg('book-msg',e.message,'error'); }
     }
@@ -1683,69 +1677,71 @@
       showMsg('epub-msg', '', '');
     }
 
-    // ===== 标签管理 =====
+    // ===== 标签系统（融合到书籍创建/编辑流程） =====
     let _allTags = [];
+    let _createBookTags = []; // 创建书籍时选中的标签ID
+
     async function loadTagList() {
       try {
         const res = await api('GET', '/api/admin/tags');
         const data = await res.json();
         _allTags = data.tags || [];
-        const el = document.getElementById('tag-list');
-        if (_allTags.length === 0) { el.innerHTML = '<li style="color:var(--text-light)">暂无标签</li>'; return; }
-        el.innerHTML = _allTags.map(t => `
-          <li data-id="${t.id}">
-            <div class="item-info" style="display:flex;align-items:center;gap:8px">
-              <span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:${esc(t.color)}"></span>
-              <span class="item-title">${esc(t.name)}</span>
-              <span class="item-meta" style="margin-left:4px">${t.book_count || 0} 本书</span>
-            </div>
-            ${currentRole !== 'demo' ? `<div class="item-actions">
-              <button class="btn btn-sm btn-edit-tag">编辑</button>
-              <button class="btn btn-sm btn-danger btn-delete-tag">删除</button>
-            </div>` : ''}
-          </li>
-        `).join('');
-      } catch { document.getElementById('tag-list').innerHTML = '<li style="color:var(--text-light)">加载失败</li>'; }
+      } catch { _allTags = []; }
     }
-    document.getElementById('create-tag-btn').addEventListener('click', async () => {
-      const name = document.getElementById('tag-name').value.trim();
-      const color = document.getElementById('tag-color').value;
-      if (!name) return showMsg('tag-msg', '请输入标签名', 'error');
-      try {
-        const res = await api('POST', '/api/admin/tags', { name, color });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error);
-        document.getElementById('tag-name').value = '';
-        showMsg('tag-msg', '创建成功', 'success');
-        loadTagList();
-      } catch (e) { showMsg('tag-msg', e.message, 'error'); }
-    });
-    document.getElementById('tag-list').addEventListener('click', async (e) => {
-      const li = e.target.closest('li[data-id]');
-      if (!li) return;
-      const id = Number(li.dataset.id);
-      const tag = _allTags.find(t => t.id === id);
-      if (!tag) return;
-      if (e.target.classList.contains('btn-edit-tag')) {
-        const newName = prompt('标签名：', tag.name);
-        if (newName === null) return;
-        const newColor = prompt('颜色（如 #3498db）：', tag.color);
-        try {
-          const res = await api('PUT', '/api/admin/tags', { id, name: newName || tag.name, color: newColor || tag.color });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error);
-          loadTagList();
-        } catch (e) { alert('编辑失败：' + e.message); }
-      } else if (e.target.classList.contains('btn-delete-tag')) {
-        if (!confirm(`确定删除标签「${tag.name}」？`)) return;
-        try {
-          const res = await api('DELETE', '/api/admin/tags', { id });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error);
-          loadTagList();
-        } catch (e) { alert('删除失败：' + e.message); }
+
+    // 通用标签选择器渲染（用于创建和编辑书籍）
+    function renderTagSelector(containerId, selectedIds, onToggle) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      if (_allTags.length === 0) {
+        container.innerHTML = '<span style="font-size:13px;color:var(--text-light)">暂无标签</span>';
+        return;
       }
-    });
+      container.innerHTML = _allTags.map(t => {
+        const checked = selectedIds.includes(t.id);
+        return `<label data-tag-id="${t.id}" style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;padding:4px 10px;border:1px solid ${checked ? t.color : 'var(--border)'};border-radius:12px;font-size:13px;background:${checked ? t.color + '22' : 'transparent'};color:${checked ? t.color : 'var(--text-light)'};transition:all .15s;user-select:none">
+          ${esc(t.name)}${currentRole !== 'demo' ? `<span class="tag-delete-x" data-tag-id="${t.id}" style="margin-left:2px;font-size:11px;opacity:0.5;cursor:pointer" title="删除标签">✕</span>` : ''}
+        </label>`;
+      }).join('');
+      // 点击切换选中
+      container.querySelectorAll('label[data-tag-id]').forEach(label => {
+        label.addEventListener('click', (e) => {
+          if (e.target.classList.contains('tag-delete-x')) return; // 删除按钮单独处理
+          const tagId = Number(label.dataset.tagId);
+          onToggle(tagId);
+        });
+      });
+      // 删除标签（admin以上）
+      container.querySelectorAll('.tag-delete-x').forEach(x => {
+        x.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const tagId = Number(x.dataset.tagId);
+          const tag = _allTags.find(t => t.id === tagId);
+          if (!tag) return;
+          if (!confirm(`删除标签「${tag.name}」？所有书籍上的此标签也会移除。`)) return;
+          try {
+            const res = await api('DELETE', '/api/admin/tags', { id: tagId });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            await loadTagList();
+            // 从选中列表中移除
+            _createBookTags = _createBookTags.filter(id => id !== tagId);
+            _editBookTags = _editBookTags.filter(id => id !== tagId);
+            renderCreateBookTags();
+            renderEditBookTags();
+          } catch (e) { alert('删除失败：' + e.message); }
+        });
+      });
+    }
+
+    // 创建书籍的标签选择
+    function renderCreateBookTags() {
+      renderTagSelector('create-book-tags', _createBookTags, (tagId) => {
+        if (_createBookTags.includes(tagId)) _createBookTags = _createBookTags.filter(id => id !== tagId);
+        else _createBookTags.push(tagId);
+        renderCreateBookTags();
+      });
+    }
 
     // ===== 书籍编辑弹窗 =====
     const bookEditOverlay = document.getElementById('book-edit-overlay');
@@ -1788,22 +1784,37 @@
     }
 
     function renderEditBookTags() {
-      const container = document.getElementById('edit-book-tags');
-      container.innerHTML = _allTags.map(t => {
-        const checked = _editBookTags.includes(t.id);
-        return `<label style="display:flex;align-items:center;gap:4px;cursor:pointer;padding:4px 10px;border:1px solid ${checked ? t.color : 'var(--border)'};border-radius:12px;font-size:13px;background:${checked ? t.color + '22' : 'transparent'};color:${checked ? t.color : 'var(--text-light)'}">
-          <input type="checkbox" data-tag-id="${t.id}" ${checked ? 'checked' : ''} style="display:none"> ${esc(t.name)}
-        </label>`;
-      }).join('');
-      container.addEventListener('click', (e) => {
-        const cb = e.target.closest('input[data-tag-id]') || (e.target.closest('label') && e.target.closest('label').querySelector('input[data-tag-id]'));
-        if (!cb) return;
-        const tagId = Number(cb.dataset.tagId);
-        if (cb.checked) { if (!_editBookTags.includes(tagId)) _editBookTags.push(tagId); }
-        else { _editBookTags = _editBookTags.filter(id => id !== tagId); }
+      renderTagSelector('edit-book-tags', _editBookTags, (tagId) => {
+        if (_editBookTags.includes(tagId)) _editBookTags = _editBookTags.filter(id => id !== tagId);
+        else _editBookTags.push(tagId);
         renderEditBookTags();
       });
+      // demo用户隐藏内联创建标签
+      const actions = document.getElementById('edit-tag-actions');
+      if (actions) actions.style.display = currentRole === 'demo' ? 'none' : '';
     }
+
+    // 内联创建标签（编辑弹窗内）
+    document.getElementById('inline-create-tag-btn').addEventListener('click', async () => {
+      const nameInput = document.getElementById('inline-tag-name');
+      const colorInput = document.getElementById('inline-tag-color');
+      const name = nameInput.value.trim();
+      const color = colorInput.value;
+      if (!name) return;
+      try {
+        const res = await api('POST', '/api/admin/tags', { name, color });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        nameInput.value = '';
+        await loadTagList();
+        // 自动选中新创建的标签
+        if (data.tag && data.tag.id) {
+          _editBookTags.push(data.tag.id);
+        }
+        renderEditBookTags();
+        renderCreateBookTags();
+      } catch (e) { alert('创建失败：' + e.message); }
+    });
 
     // 封面上传压缩
     async function compressCoverImage(file) {
@@ -1873,11 +1884,13 @@
       } catch (e) { alert('保存失败：' + e.message); }
     });
 
-    // 在 showAdminPanel 中也加载标签
+    // 在 showAdminPanel 中也加载标签并渲染创建书籍的标签选择器
     const _origShowAdminPanel = showAdminPanel;
-    showAdminPanel = function(username, role) {
+    showAdminPanel = async function(username, role) {
       _origShowAdminPanel(username, role);
-      loadTagList();
+      await loadTagList();
+      _createBookTags = [];
+      renderCreateBookTags();
     };
 
     async function startEpubImport() {
