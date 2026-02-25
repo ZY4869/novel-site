@@ -35,20 +35,12 @@ function buildBookHtml(bookId, book, chapters) {
   const tagsBlock = tagsHtml ? `<div class="book-tags">${tagsHtml}</div>` : '';
 
   const hasSource = !!(book.source_name || book.source_size);
-  const sourceHtml = hasSource
-    ? `
-      <div style="margin-top:12px">
-        <a class="btn btn-sm" href="/api/books/${book.id}/source" target="_blank" rel="noopener">
-          下载源文件${book.source_name ? '：' + esc(book.source_name) : ''}${book.source_size ? '（' + formatBytes(book.source_size) + '）' : ''}
-        </a>
-      </div>
-    `
-    : '';
+  const sourceHtml = hasSource ? buildSourceActionsHtml(book, chapters.length) : '';
 
   let html = buildHeaderHtml(book, tagsBlock, sourceHtml);
 
   if (chapters.length > 0) html += buildChapterSearchHtml();
-  html += buildChaptersHtml(chapters, hasSource);
+  html += buildChaptersHtml(book, chapters, hasSource);
   html += buildExportHtml(chapters.length);
   html += buildBookmarksHtml(bookId);
 
@@ -92,11 +84,14 @@ function buildChapterSearchHtml() {
   `;
 }
 
-function buildChaptersHtml(chapters, hasSource) {
+function buildChaptersHtml(book, chapters, hasSource) {
   if (chapters.length === 0) {
-    return hasSource
-      ? '<div class="empty"><p>暂无章节</p><p style="color:var(--text-light);font-size:13px">该书仅提供源文件下载</p></div>'
-      : '<div class="empty"><p>暂无章节</p></div>';
+    if (!hasSource) return '<div class="empty"><p>暂无章节</p></div>';
+
+    const mode = getSourceReadMode(book);
+    const readLink = mode ? `<a href="/read?book=${book.id}">在线阅读源文件</a>` : '';
+    const note = mode ? `你可以先${readLink}，也可以到<a href="/admin">管理后台</a>导入生成章节。` : `该源文件格式暂不支持在线阅读，请下载源文件，或到<a href="/admin">管理后台</a>使用 TXT/EPUB 导入生成章节。`;
+    return `<div class="empty"><p>暂无章节</p><p style="color:var(--text-light);font-size:13px">${note}</p></div>`;
   }
   return (
     '<ul class="chapter-list">' +
@@ -104,7 +99,7 @@ function buildChaptersHtml(chapters, hasSource) {
       .map(
         (c) => `
         <li>
-          <a href="/read.html?id=${c.id}">
+          <a href="/read?id=${c.id}">
             <span class="chapter-title">${esc(c.title)}</span>
             <span class="chapter-meta">${c.word_count} 字</span>
           </a>
@@ -114,6 +109,27 @@ function buildChaptersHtml(chapters, hasSource) {
       .join('') +
     '</ul>'
   );
+}
+
+function buildSourceActionsHtml(book, chapterCount) {
+  const mode = getSourceReadMode(book);
+  const canRead = chapterCount === 0 && !!mode;
+  return `
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+      ${canRead ? `<a class="btn btn-sm" href="/read?book=${book.id}">在线阅读（源文件）</a>` : ''}
+      <a class="btn btn-sm" href="/api/books/${book.id}/source" target="_blank" rel="noopener">
+        下载源文件${book.source_name ? '：' + esc(book.source_name) : ''}${book.source_size ? '（' + formatBytes(book.source_size) + '）' : ''}
+      </a>
+    </div>
+  `;
+}
+
+function getSourceReadMode(book) {
+  const type = String(book?.source_type || '').toLowerCase();
+  const name = String(book?.source_name || book?.title || '').toLowerCase();
+  if (type.includes('epub') || name.endsWith('.epub')) return 'epub';
+  if (type.startsWith('text/') || name.endsWith('.txt') || name.endsWith('.text')) return 'text';
+  return null;
 }
 
 function buildExportHtml(chapterCount) {
@@ -133,7 +149,7 @@ function buildBookmarksHtml(bookId) {
       .map(
         (bm) => `
         <li>
-          <a href="/read.html?id=${bm.chapterId}">
+          <a href="${bookmarkHref(bookId, bm.chapterId)}">
             <span class="chapter-title">${esc(bm.chapterTitle)}</span>
             <span class="chapter-meta">${formatTimeAgo(bm.time)}</span>
           </a>
@@ -143,6 +159,14 @@ function buildBookmarksHtml(bookId) {
       .join('') +
     '</ul></div>';
   return html;
+}
+
+function bookmarkHref(bookId, chapterId) {
+  const chId = String(chapterId ?? '');
+  if (/^\d+$/.test(chId)) return `/read?id=${chId}`;
+  const m = chId.match(new RegExp(`^src-${bookId}-(\\d+)$`));
+  if (m) return `/read?book=${bookId}#pos=${m[1]}`;
+  return `/book?id=${bookId}`;
 }
 
 function bindBookEvents(book) {
@@ -175,4 +199,3 @@ function getBookmarks(bookId) {
     return [];
   }
 }
-

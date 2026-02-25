@@ -96,16 +96,20 @@ function renderBookList(data) {
         const canDelete = auth.role !== 'demo' || b.created_by === auth.userId;
         const hasSource = !!b.has_source;
         const downloadOnly = (b.chapter_count || 0) === 0 && hasSource;
+        const sourceMode = downloadOnly ? getSourceReadMode(b) : null;
         const sourceInfo = hasSource ? ` / 源文件 ${formatBytes(b.source_size || 0)}` : '';
         return `
           <li data-id="${b.id}">
             <div class="item-info">
               <div class="item-title">${esc(b.title)}${
-          downloadOnly ? ' <span style="font-size:11px;color:var(--text-light)">(仅可下载)</span>' : ''
+          downloadOnly
+            ? ` <span style="font-size:11px;color:var(--text-light)">${sourceMode ? '(源文件可读)' : '(仅可下载)'}</span>`
+            : ''
         }${auth.role === 'demo' && !isOwner ? ' <span style="font-size:11px;color:var(--text-light)">(他人)</span>' : ''}</div>
               <div class="item-meta">${b.author ? `${esc(b.author)} / ` : ''}${b.chapter_count} 章 / ${b.total_words} 字${sourceInfo}</div>
             </div>
             <div class="item-actions">
+              ${sourceMode ? `<a class="btn btn-sm" href="/read?book=${b.id}" target="_blank" rel="noopener">在线读</a>` : ''}
               ${hasSource ? `<a class="btn btn-sm" href="/api/books/${b.id}/source" target="_blank" rel="noopener">下载</a>` : ''}
               ${isOwner ? '<button class="btn btn-sm btn-edit-book">编辑</button>' : ''}
               ${canDelete ? '<button class="btn btn-sm btn-danger btn-delete-book">删除</button>' : ''}
@@ -117,6 +121,14 @@ function renderBookList(data) {
   } catch (e) {
     el.innerHTML = `<li class="msg msg-error">${esc(e.message)}</li>`;
   }
+}
+
+function getSourceReadMode(book) {
+  const type = String(book?.source_type || '').toLowerCase();
+  const name = String(book?.source_name || book?.title || '').toLowerCase();
+  if (type.includes('epub') || name.endsWith('.epub')) return 'epub';
+  if (type.startsWith('text/') || name.endsWith('.txt') || name.endsWith('.text')) return 'text';
+  return null;
 }
 
 function renderBookSelects(data) {
@@ -199,4 +211,3 @@ async function createBookFromSource() {
     showMsg('source-book-msg', `${e.message || '失败'}${note}`, 'error');
   }
 }
-

@@ -20,7 +20,7 @@ export function renderContinueReading() {
   entries.sort((a, b) => b.time - a.time);
   const latest = entries[0];
   container.innerHTML = `
-    <a class="continue-reading" href="/read.html?id=${latest.chapterId}">
+    <a class="continue-reading" href="${buildReadHref(latest)}">
       <div class="continue-info">
         <div class="continue-label">继续阅读</div>
         <div class="continue-title">${esc(latest.bookTitle || '未知书籍')}</div>
@@ -29,6 +29,16 @@ export function renderContinueReading() {
       <div class="continue-arrow">→</div>
     </a>
   `;
+}
+
+function buildReadHref(progress) {
+  const chId = String(progress?.chapterId ?? '');
+  if (/^\d+$/.test(chId)) return `/read?id=${chId}`;
+  const m = chId.match(/^src-(\d+)-(\d+)$/);
+  if (m) return `/read?book=${m[1]}#pos=${m[2]}`;
+  const bookId = String(progress?.bookId ?? '');
+  if (/^\d+$/.test(bookId)) return `/book?id=${bookId}`;
+  return '/';
 }
 
 export function renderReadingStats() {
@@ -47,4 +57,3 @@ export function renderReadingStats() {
     container.innerHTML = '';
   }
 }
-

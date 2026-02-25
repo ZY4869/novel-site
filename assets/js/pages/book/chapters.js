@@ -20,7 +20,7 @@ export function filterChapters() {
   listEl.innerHTML = filtered
     .map(
       (c) => `
-      <li><a href="/read.html?id=${c.id}">
+      <li><a href="/read?id=${c.id}">
         <span class="chapter-title">${highlightMatch(esc(c.title), q)}</span>
         <span class="chapter-meta">${c.word_count} 字</span>
       </a></li>
@@ -28,4 +28,3 @@ export function filterChapters() {
     )
     .join('');
 }
-

@@ -2,6 +2,7 @@ import { api, concurrentUpload, uploadBookSource } from './api.js';
 import { refreshAllBooks } from './books.js';
 import { auth } from './state.js';
 import { showMsg } from './ui.js';
+import { parseEpubArrayBuffer } from '../shared/epub.js';
 
 let epubImportFile = null;
 let epubChapters = [];
@@ -57,8 +58,7 @@ async function onEpubFileChange() {
 
   try {
     const arrayBuffer = await file.arrayBuffer();
-    const zip = await JSZip.loadAsync(arrayBuffer);
-    const { meta, chapters } = await parseEpub(zip, file.name);
+    const { meta, chapters } = await parseEpubArrayBuffer(arrayBuffer, file.name, JSZip);
     epubChapters = chapters;
 
     setValue('epub-book-title', meta.title);
@@ -73,63 +73,6 @@ async function onEpubFileChange() {
     resetEpub(false);
     showMsg('epub-msg', `解析失败：${e.message}`, 'error');
   }
-}
-
-async function parseEpub(zip, filename) {
-  const containerXml = await zip.file('META-INF/container.xml')?.async('text');
-  if (!containerXml) throw new Error('无效的 EPUB：缺少 META-INF/container.xml');
-  const containerDoc = new DOMParser().parseFromString(containerXml, 'application/xml');
-  const rootfileEl = containerDoc.querySelector('rootfile[full-path]');
-  if (!rootfileEl) throw new Error('无效的 EPUB：找不到 OPF 路径');
-
-  const opfPath = rootfileEl.getAttribute('full-path');
-  const opfDir = opfPath.includes('/') ? opfPath.slice(0, opfPath.lastIndexOf('/') + 1) : '';
-  const opfXml = await zip.file(opfPath)?.async('text');
-  if (!opfXml) throw new Error(`无效的 EPUB：找不到 OPF 文件 ${opfPath}`);
-  const opfDoc = new DOMParser().parseFromString(opfXml, 'application/xml');
-
-  const title =
-    getMeta(opfDoc, 'title') ||
-    getMeta(opfDoc, 'dc:title') ||
-    filename.replace(/\\.epub$/i, '');
-  const author = getMeta(opfDoc, 'creator') || getMeta(opfDoc, 'dc:creator') || '';
-  const description = getMeta(opfDoc, 'description') || getMeta(opfDoc, 'dc:description') || '';
-
-  const manifest = new Map();
-  opfDoc.querySelectorAll('manifest > item[id][href]').forEach((it) => {
-    manifest.set(it.getAttribute('id'), it.getAttribute('href'));
-  });
-
-  const spineIds = Array.from(opfDoc.querySelectorAll('spine > itemref[idref]')).map((it) => it.getAttribute('idref'));
-
-  const chapters = [];
-  for (const idref of spineIds) {
-    const href = manifest.get(idref);
-    if (!href) continue;
-    const fullPath = normalizePath(opfDir + href);
-    const txt = await zip.file(fullPath)?.async('text');
-    if (!txt) continue;
-    const parsed = extractChapter(txt);
-    if (!parsed.content) continue;
-    chapters.push({ title: parsed.title || `章节 ${chapters.length + 1}`, content: parsed.content, checked: true });
-  }
-
-  if (chapters.length === 0) throw new Error('未解析到章节内容');
-  return { meta: { title, author, description }, chapters };
-}
-
-function extractChapter(html) {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  const title =
-    doc.querySelector('h1')?.textContent?.trim() ||
-    doc.querySelector('title')?.textContent?.trim() ||
-    '';
-  const bodyText = doc.body?.textContent || '';
-  const content = bodyText
-    .replace(/\\r\\n?/g, '\\n')
-    .replace(/\\n{3,}/g, '\\n\\n')
-    .trim();
-  return { title, content };
 }
 
 function renderEpubChapters() {
@@ -253,24 +196,6 @@ function resetEpub(clearMsg) {
   if (clearMsg) showMsg('epub-msg', '', '');
 }
 
-function getMeta(doc, tag) {
-  const el =
-    doc.querySelector(`metadata ${tag}`) ||
-    doc.querySelector(`metadata ${tag.replace('dc:', '')}`) ||
-    doc.getElementsByTagNameNS('http://purl.org/dc/elements/1.1/', tag.replace('dc:', ''))?.[0];
-  return el ? String(el.textContent || '').trim() : '';
-}
-
-function normalizePath(p) {
-  const parts = [];
-  p.split('/').forEach((seg) => {
-    if (!seg || seg === '.') return;
-    if (seg === '..') parts.pop();
-    else parts.push(seg);
-  });
-  return parts.join('/');
-}
-
 function escapeAttr(s) {
   return String(s || '').replace(/&/g, '&amp;').replace(/\"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -293,4 +218,3 @@ function setValue(id, v) {
   const el = document.getElementById(id);
   if (el) el.value = v || '';
 }
-

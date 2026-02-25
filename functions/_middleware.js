@@ -65,9 +65,13 @@ export async function onRequest(context) {
 
     // 安全头
     response.headers.set('X-Frame-Options', 'DENY');
-    // CSP：默认仅允许同源脚本。管理后台的 EPUB 导入依赖 JSZip（CDN），仅对 /admin.html 放开该域名。
-    const isAdminPage = url.pathname === '/admin.html' || url.pathname === '/admin';
-    const scriptSrc = isAdminPage
+    // CSP：默认仅允许同源脚本。管理后台 EPUB 导入、以及“源文件在线阅读(EPUB)”需要 JSZip（CDN），仅对指定页面放开该域名。
+    const allowCdnScripts =
+      url.pathname === '/admin.html' ||
+      url.pathname === '/admin' ||
+      url.pathname === '/read.html' ||
+      url.pathname === '/read';
+    const scriptSrc = allowCdnScripts
       ? "script-src 'self' https://cdn.jsdelivr.net"
       : "script-src 'self'";
     response.headers.set(

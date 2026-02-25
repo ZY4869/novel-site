@@ -44,7 +44,7 @@ async function init() {
     if (!res.ok) throw new Error(data.error || '加载失败');
     comic = data.comic;
     document.title = (comic.title || '漫画阅读') + ' - 我的书架';
-    qs('#breadcrumb').innerHTML = `<a href="/comics.html">漫画</a><span>›</span><span>${esc(comic.title || '未命名')}</span>`;
+    qs('#breadcrumb').innerHTML = `<a href="/comics">漫画</a><span>›</span><span>${esc(comic.title || '未命名')}</span>`;
 
     const pageParam = getQueryParam('page');
     const saved = getSavedPage(comicId);
@@ -123,4 +123,3 @@ function loadSiteSettings() {
     })
     .catch(() => {});
 }
-

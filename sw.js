@@ -1,14 +1,13 @@
 // Service Worker for 我的书架 PWA
-const CACHE_NAME = 'novel-site-v7';
+const CACHE_NAME = 'novel-site-v9';
 
-// 预缓存使用 .html 版本，避免本地/其他静态托管环境没有 pretty URL 时安装失败
+// 预缓存优先使用 pretty URL（Cloudflare Pages 默认会将 *.html 308 到无扩展名）
 const APP_SHELL = [
   '/',
-  '/index.html',
-  '/book.html',
-  '/read.html',
-  '/comics.html',
-  '/comic-read.html',
+  '/book',
+  '/read',
+  '/comics',
+  '/comic-read',
   '/style.css',
   '/assets/css/base.css',
   '/assets/css/theme.css',
@@ -31,6 +30,8 @@ const APP_SHELL = [
   '/assets/js/shared/cover.js',
   '/assets/js/shared/format.js',
   '/assets/js/shared/highlight.js',
+  '/assets/js/shared/text.js',
+  '/assets/js/shared/epub.js',
   '/assets/js/pages/index.js',
   '/assets/js/pages/index/state.js',
   '/assets/js/pages/index/books.js',
@@ -53,6 +54,7 @@ const APP_SHELL = [
   '/assets/js/read/fonts.js',
   '/assets/js/read/preload.js',
   '/assets/js/read/chapter.js',
+  '/assets/js/read/source.js',
   '/assets/js/read/bookmarks.js',
   '/assets/js/read/stats.js',
   '/assets/js/read/immersive.js',
@@ -101,6 +103,15 @@ function isAppPage(pathname) {
   return APP_PAGE_PATHS.has(pathname);
 }
 
+const CANONICAL_PAGE = new Map([
+  ['/index', '/'],
+  ['/index.html', '/'],
+  ['/book.html', '/book'],
+  ['/read.html', '/read'],
+  ['/comics.html', '/comics'],
+  ['/comic-read.html', '/comic-read'],
+]);
+
 function isSourceDownload(pathname) {
   return /^\/api\/books\/\d+\/source$/.test(pathname) || /^\/api\/comics\/\d+\/source$/.test(pathname);
 }
@@ -142,7 +153,7 @@ self.addEventListener('fetch', (e) => {
   if (url.origin !== self.location.origin) return;
 
   // Admin UI: always network (no caching)
-  if (url.pathname === '/admin.html') return;
+  if (url.pathname === '/admin.html' || url.pathname === '/admin') return;
 
   // Admin API: always network (no caching)
   if (url.pathname.startsWith('/api/admin') || url.pathname.startsWith('/api/auth')) return;
@@ -180,8 +191,9 @@ self.addEventListener('fetch', (e) => {
 
   // App shell & static: Cache First
   // 对带 query 的页面（book/read/comic-read）按 pathname 归一化，避免缓存膨胀
-  const cacheKey = (isAppPage(url.pathname) || url.pathname.endsWith('.html'))
-    ? new Request(url.origin + url.pathname)
+  const canonicalPath = CANONICAL_PAGE.get(url.pathname) || url.pathname;
+  const cacheKey = (isAppPage(url.pathname) || isAppPage(canonicalPath) || url.pathname.endsWith('.html'))
+    ? new Request(url.origin + canonicalPath)
     : e.request;
 
   e.respondWith(

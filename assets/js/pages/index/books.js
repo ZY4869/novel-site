@@ -1,5 +1,6 @@
 import { coverColor } from '../../shared/cover.js';
 import { esc, qs } from '../../shared/dom.js';
+import { formatBytes } from '../../shared/format.js';
 import { state } from './state.js';
 import { renderContinueReading, renderReadingStats } from './reading.js';
 
@@ -78,7 +79,7 @@ function renderBooks(books) {
     el.className = '';
     el.innerHTML =
       state.allBooks.length === 0
-        ? '<div class="empty"><p>📖 书架空空如也</p><p>去<a href="/admin.html">管理后台</a>添加第一本书吧</p></div>'
+        ? '<div class="empty"><p>📖 书架空空如也</p><p>去<a href="/admin">管理后台</a>添加第一本书吧</p></div>'
         : '<div class="empty"><p>没有匹配的书籍</p></div>';
     return;
   }
@@ -86,26 +87,30 @@ function renderBooks(books) {
   el.className = 'book-grid-cover';
   el.innerHTML = books
     .map((b) => {
+      const hasSource = !!(b.has_source || b.source_name || b.source_size);
+      const isSourceOnly = (b.chapter_count || 0) === 0 && hasSource;
+      const sourceMode = isSourceOnly ? getSourceReadMode(b) : null;
+      const metaText = isSourceOnly ? buildSourceMeta(b, sourceMode) : `${b.chapter_count}章`;
       const tagsHtml = (b.tags || [])
         .map((t) => `<span class="tag-pill" style="background:${esc(t.color)}22;color:${esc(t.color)}">${esc(t.name)}</span>`)
         .join('');
       if (b.cover_key) {
-        return `<a class="book-card-cover" href="/book.html?id=${b.id}">
+        return `<a class="book-card-cover" href="/book?id=${b.id}">
           <img class="cover-img" src="/api/covers/${b.id}" alt="${esc(b.title)}" loading="lazy">
           <div class="card-body">
             <h3>${esc(b.title)}</h3>
-            <div class="meta">${b.author ? esc(b.author) + ' · ' : ''}${b.chapter_count}章</div>
+            <div class="meta">${b.author ? esc(b.author) + ' · ' : ''}${metaText}</div>
             ${tagsHtml ? '<div class="card-tags">' + tagsHtml + '</div>' : ''}
           </div>
         </a>`;
       }
       const color = coverColor(b.title);
       const firstChar = (b.title || '?')[0];
-      return `<a class="book-card-cover" href="/book.html?id=${b.id}">
+      return `<a class="book-card-cover" href="/book?id=${b.id}">
         <div class="cover-placeholder" style="background:${color}">${esc(firstChar)}</div>
         <div class="card-body">
           <h3>${esc(b.title)}</h3>
-          <div class="meta">${b.author ? esc(b.author) + ' · ' : ''}${b.chapter_count}章</div>
+          <div class="meta">${b.author ? esc(b.author) + ' · ' : ''}${metaText}</div>
           ${tagsHtml ? '<div class="card-tags">' + tagsHtml + '</div>' : ''}
         </div>
       </a>`;
@@ -113,3 +118,16 @@ function renderBooks(books) {
     .join('');
 }
 
+function buildSourceMeta(book, mode) {
+  const size = book.source_size ? ` · ${formatBytes(book.source_size)}` : '';
+  const hint = mode ? ' · 可在线读' : ' · 仅下载';
+  return `源文件${size}${hint}`;
+}
+
+function getSourceReadMode(book) {
+  const type = String(book?.source_type || '').toLowerCase();
+  const name = String(book?.source_name || book?.title || '').toLowerCase();
+  if (type.includes('epub') || name.endsWith('.epub')) return 'epub';
+  if (type.startsWith('text/') || name.endsWith('.txt') || name.endsWith('.text')) return 'text';
+  return null;
+}

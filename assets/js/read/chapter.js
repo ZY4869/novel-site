@@ -34,18 +34,18 @@ async function loadChapter() {
     const metaDesc = document.querySelector('meta[name="description"]');
     if (metaDesc) metaDesc.content = `${c.book_title} - ${c.title}`;
 
-    state.nav.backUrl = `/book.html?id=${c.book_id}`;
+    state.nav.backUrl = `/book?id=${c.book_id}`;
     if (dom.backLink) dom.backLink.href = state.nav.backUrl;
     if (dom.breadcrumb) {
-      dom.breadcrumb.innerHTML = `<a href="/">书架</a><span>›</span><a href="/book.html?id=${c.book_id}">${esc(c.book_title)}</a><span>›</span>${esc(c.title)}`;
+      dom.breadcrumb.innerHTML = `<a href="/">书架</a><span>›</span><a href="/book?id=${c.book_id}">${esc(c.book_title)}</a><span>›</span>${esc(c.title)}`;
     }
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'reader-content';
     contentDiv.textContent = data.content;
 
-    state.nav.prevUrl = data.prevChapter ? `/read.html?id=${data.prevChapter.id}` : null;
-    state.nav.nextUrl = data.nextChapter ? `/read.html?id=${data.nextChapter.id}` : null;
+    state.nav.prevUrl = data.prevChapter ? `/read?id=${data.prevChapter.id}` : null;
+    state.nav.nextUrl = data.nextChapter ? `/read?id=${data.nextChapter.id}` : null;
 
     const nav = document.createElement('div');
     nav.className = 'reader-nav';
@@ -55,7 +55,7 @@ async function loadChapter() {
           ? `<a href="${state.nav.prevUrl}">←${esc(data.prevChapter.title)}</a>`
           : '<span class="disabled">已经是第一章</span>'
       }
-      <a href="/book.html?id=${c.book_id}">目录</a>
+      <a href="/book?id=${c.book_id}">目录</a>
       <a href="#" id="export-btn" style="font-size:13px">导出TXT</a>
       <a href="#" id="download-book-btn" style="font-size:13px">📜 缓存全书</a>
       ${
@@ -145,9 +145,8 @@ async function loadTOC(bookId, currentChapterId) {
     if (dom.tocTitle) dom.tocTitle.textContent = data.book.title;
     if (dom.tocList) {
       dom.tocList.innerHTML = (data.chapters || [])
-        .map((ch) => `<li><a href="/read.html?id=${ch.id}" class="${ch.id === currentChapterId ? 'current' : ''}">${esc(ch.title)}</a></li>`)
+        .map((ch) => `<li><a href="/read?id=${ch.id}" class="${ch.id === currentChapterId ? 'current' : ''}">${esc(ch.title)}</a></li>`)
         .join('');
     }
   } catch {}
 }
-

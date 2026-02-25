@@ -17,7 +17,7 @@ async function loadComics() {
     const comics = data.comics || [];
     if (comics.length === 0) {
       el.className = '';
-      el.innerHTML = '<div class="empty"><p>🖼️ 暂无漫画</p><p>去<a href="/admin.html">管理后台</a>导入一本 CBZ 吧</p></div>';
+      el.innerHTML = '<div class="empty"><p>🖼️ 暂无漫画</p><p>去<a href="/admin">管理后台</a>导入一本 CBZ 吧</p></div>';
       return;
     }
     el.className = 'book-grid-cover';
@@ -26,7 +26,7 @@ async function loadComics() {
         const title = c.title || '未命名';
         const meta = `${c.page_count || 0} 页`;
         if (c.cover_url) {
-          return `<a class="book-card-cover" href="/comic-read.html?id=${c.id}">
+          return `<a class="book-card-cover" href="/comic-read?id=${c.id}">
             <img class="cover-img" src="${esc(c.cover_url)}" alt="${esc(title)}" loading="lazy">
             <div class="card-body">
               <h3>${esc(title)}</h3>
@@ -36,7 +36,7 @@ async function loadComics() {
         }
         const color = coverColor(title);
         const firstChar = (title || '?')[0];
-        return `<a class="book-card-cover" href="/comic-read.html?id=${c.id}">
+        return `<a class="book-card-cover" href="/comic-read?id=${c.id}">
           <div class="cover-placeholder" style="background:${color}">${esc(firstChar)}</div>
           <div class="card-body">
             <h3>${esc(title)}</h3>
@@ -62,4 +62,3 @@ function loadSiteSettings() {
     })
     .catch(() => {});
 }
-

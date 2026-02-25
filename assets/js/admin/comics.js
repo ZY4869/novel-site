@@ -33,7 +33,7 @@ export async function loadComicList() {
             <div class="item-meta">${(c.page_count || 0)} 页${c.source_size ? ' / 源文件 ' + formatBytes(c.source_size) : ''}${c.updated_at ? ' / ' + esc(String(c.updated_at).slice(0, 10)) : ''}</div>
           </div>
           <div class="item-actions">
-            <a class="btn btn-sm" href="/comic-read.html?id=${c.id}" target="_blank" rel="noopener">阅读</a>
+            <a class="btn btn-sm" href="/comic-read?id=${c.id}" target="_blank" rel="noopener">阅读</a>
             <button class="btn btn-sm btn-danger btn-delete-comic">删除</button>
           </div>
         </li>
@@ -229,4 +229,3 @@ function setText(id, v) {
   const el = document.getElementById(id);
   if (el) el.textContent = String(v ?? '');
 }
-
