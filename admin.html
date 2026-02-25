@@ -923,11 +923,20 @@
       if (e.target.classList.contains('btn-edit-book')) {
         openBookEditOverlay(book);
       } else if (e.target.classList.contains('btn-delete-book')) {
+        const btn = e.target;
         if (!confirm(`确定删除「${book.title}」及其所有章节？此操作不可恢复！`)) return;
+        btn.disabled = true;
+        btn.textContent = '删除中...';
+        btn.style.opacity = '0.6';
         api('DELETE',`/api/admin/books/${id}`).then(r=>r.json()).then(d=>{
           if (!d.success&&d.error) throw new Error(d.error);
           refreshAllBooks(); loadChapters();
-        }).catch(e=>alert('删除失败：'+e.message));
+        }).catch(err=>{
+          alert('删除失败：'+err.message);
+          btn.disabled = false;
+          btn.textContent = '删除';
+          btn.style.opacity = '';
+        });
       }
     });
     async function loadBookSelects() {
@@ -979,16 +988,6 @@
         .then(r=>r.json()).then(d=>{if(d.error)throw new Error(d.error);refreshAllBooks();})
         .catch(e=>alert('编辑失败：'+e.message));
     }
-    async function deleteBook(id,title) {
-      if (!confirm(`确定删除「${title}」及其所有章节？此操作不可恢复！`)) return;
-      try {
-        const res=await api('DELETE',`/api/admin/books/${id}`);
-        const data=await res.json();
-        if (!res.ok) throw new Error(data.error);
-        refreshAllBooks(); loadChapters();
-      } catch(e) { alert('删除失败：'+e.message); }
-    }
-
     // ===== 章节 =====
     async function createChapter() {
       const book_id=document.getElementById('chapter-book').value;
@@ -1280,12 +1279,14 @@
       if (ids.length === 0) return showMsg('manage-msg', '请先勾选要删除的章节', 'error');
       if (!confirm(`确定删除选中的 ${ids.length} 个章节？此操作不可恢复！`)) return;
       let deleted = 0, errors = [];
+      showMsg('manage-msg', `正在删除 0/${ids.length} ...`, '');
       for (const id of ids) {
         try {
           const res = await api('DELETE', `/api/admin/chapters/${id}`);
           if (!res.ok) { const d = await res.json(); errors.push(d.error); }
           else deleted++;
         } catch (e) { errors.push(e.message); }
+        showMsg('manage-msg', `正在删除 ${deleted + errors.length}/${ids.length} ...`, '');
       }
       if (errors.length > 0) {
         showMsg('manage-msg', `删除 ${deleted} 章，${errors.length} 章失败`, 'error');
