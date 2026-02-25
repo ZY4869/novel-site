@@ -1223,6 +1223,8 @@
 
       // mouseup 后：抑制 Chrome 选中文本浮动工具栏 + 触发选区检测
       readerContent.addEventListener('mouseup', (e) => {
+        // 如果点击的是浮动按钮，不要干扰选区
+        if (e.target.closest('#anno-float-btn')) return;
         setTimeout(() => {
           const sel = window.getSelection();
           if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
@@ -1234,8 +1236,10 @@
         }, 10);
       });
 
-      // 浮动按钮点击
-      document.getElementById('anno-float-btn').addEventListener('click', openAnnotationEditor);
+      // 浮动按钮：mousedown 阻止默认行为（防止清除选区）+ click 打开编辑器
+      const floatBtn = document.getElementById('anno-float-btn');
+      floatBtn.addEventListener('mousedown', (e) => { e.preventDefault(); e.stopPropagation(); });
+      floatBtn.addEventListener('click', (e) => { e.stopPropagation(); openAnnotationEditor(); });
 
       // 编辑器按钮
       document.getElementById('anno-vis-btn').addEventListener('click', toggleVisibility);

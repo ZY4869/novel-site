@@ -837,10 +837,11 @@ body.immersive .pager-tap-right { bottom: 0; }
   --anno-color-hover: rgba(91, 155, 213, 0.1);
 }
 
-/* 移动端浮动按钮 */
+/* 浮动按钮 */
 .anno-float-btn {
   position: fixed;
   z-index: 9999;
+  display: none;
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -859,6 +860,7 @@ body.immersive .pager-tap-right { bottom: 0; }
 .anno-editor {
   position: fixed;
   z-index: 9998;
+  display: none;
   background: var(--card-bg, #fff);
   border: 1px solid var(--border, #ddd);
   border-radius: 12px;
@@ -935,6 +937,7 @@ body.immersive .pager-tap-right { bottom: 0; }
 .anno-popover {
   position: fixed;
   z-index: 9997;
+  display: none;
   background: var(--card-bg, #fff);
   border: 1px solid var(--border, #ddd);
   border-radius: 10px;
