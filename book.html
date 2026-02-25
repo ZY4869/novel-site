@@ -78,6 +78,8 @@
         const tagsHtml = (b.tags || []).map(t => `<span class="tag-pill" style="background:${esc(t.color)}22;color:${esc(t.color)}">${esc(t.name)}</span>`).join('');
         const tagsBlock = tagsHtml ? `<div class="book-tags">${tagsHtml}</div>` : '';
 
+        const uploaderHtml = b.uploader ? `<div class="uploader" style="font-size:13px;color:var(--text-light);margin-top:4px">${b.uploader_avatar ? '<img src="'+esc(b.uploader_avatar)+'" style="width:16px;height:16px;border-radius:50%;vertical-align:middle;margin-right:3px">' : ''}上传：${esc(b.uploader)}</div>` : '';
+
         let html;
         if (b.cover_key) {
           html = `
@@ -87,6 +89,7 @@
                 <div class="book-info">
                   <h2>${esc(b.title)}</h2>
                   ${b.author ? `<div class="author">作者：${esc(b.author)}</div>` : ''}
+                  ${uploaderHtml}
                   ${b.description ? `<div class="desc">${cleanDesc(b.description)}</div>` : ''}
                   ${tagsBlock}
                 </div>
@@ -98,6 +101,7 @@
             <div class="book-header">
               <h2>${esc(b.title)}</h2>
               ${b.author ? `<div class="author">作者：${esc(b.author)}</div>` : ''}
+              ${uploaderHtml}
               ${b.description ? `<div class="desc">${cleanDesc(b.description)}</div>` : ''}
               ${tagsBlock}
             </div>

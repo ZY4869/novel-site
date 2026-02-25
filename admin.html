@@ -1270,11 +1270,13 @@
         _adminsCache = admins;
         const el = document.getElementById('admin-users-list');
         if (admins.length === 0) { el.innerHTML = '<p style="color:var(--text-light);font-size:13px">暂无管理员</p>'; return; }
-        el.innerHTML = '<table style="width:100%;font-size:14px;border-collapse:collapse"><thead><tr style="border-bottom:2px solid var(--border)"><th style="text-align:left;padding:6px">用户名</th><th style="text-align:left;padding:6px">角色</th><th style="text-align:left;padding:6px">来源</th><th style="text-align:left;padding:6px">密码</th><th style="text-align:left;padding:6px">创建时间</th><th style="text-align:right;padding:6px">操作</th></tr></thead><tbody>' +
+        el.innerHTML = '<table style="width:100%;font-size:14px;border-collapse:collapse"><thead><tr style="border-bottom:2px solid var(--border)"><th style="text-align:left;padding:6px">用户名</th><th style="text-align:left;padding:6px">角色</th><th style="text-align:left;padding:6px">来源</th><th style="text-align:left;padding:6px">书籍</th><th style="text-align:left;padding:6px">密码</th><th style="text-align:left;padding:6px">创建时间</th><th style="text-align:right;padding:6px">操作</th></tr></thead><tbody>' +
           admins.map(a => {
             const isGH = !!a.github_id;
             const ghInfo = isGH ? `<span title="GitHub: ${esc(a.github_login || '')}">${a.avatar_url ? '<img src="'+esc(a.avatar_url)+'" style="width:16px;height:16px;border-radius:50%;vertical-align:middle;margin-right:3px">' : ''}🐙 ${esc(a.github_login || '')}</span>` : '<span style="color:var(--text-light)">本地</span>';
-            return `<tr data-id="${a.id}" data-name="${esc(a.username)}" data-lock="${a.password_locked ? 1 : 0}" style="border-bottom:1px solid var(--border)"><td style="padding:6px">${esc(a.username)}</td><td style="padding:6px"><select class="admin-role-select" data-id="${a.id}" style="padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:13px"><option value="super_admin"${a.role==='super_admin'?' selected':''}>超级管理员</option><option value="admin"${a.role==='admin'?' selected':''}>管理员</option><option value="demo"${a.role==='demo'?' selected':''}>演示</option></select></td><td style="padding:6px;font-size:12px">${ghInfo}</td><td style="padding:6px"><span title="${a.password_locked ? '密码已锁定' : '密码可修改'}">${a.password_locked ? '🔒' : '🔓'}</span> <button class="btn btn-sm btn-toggle-pwd-lock" data-action="toggle-pwd-lock" style="font-size:11px;padding:1px 6px">${a.password_locked ? '解锁' : '锁定'}</button></td><td style="padding:6px;color:var(--text-light);font-size:12px">${a.created_at ? a.created_at.slice(0,10) : '-'}</td><td style="padding:6px;text-align:right"><button class="btn btn-sm btn-danger btn-delete-admin" data-action="delete-admin">删除</button></td></tr>`;
+            const bookCount = a.book_count || 0;
+            const bookInfo = bookCount > 0 ? `<span style="cursor:pointer;color:var(--primary)" class="btn-view-user-books" title="查看书籍">${bookCount} 本</span>` : '<span style="color:var(--text-light)">0</span>';
+            return `<tr data-id="${a.id}" data-name="${esc(a.username)}" data-lock="${a.password_locked ? 1 : 0}" style="border-bottom:1px solid var(--border)"><td style="padding:6px">${esc(a.username)}</td><td style="padding:6px"><select class="admin-role-select" data-id="${a.id}" style="padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--bg);color:var(--text);font-size:13px"><option value="super_admin"${a.role==='super_admin'?' selected':''}>超级管理员</option><option value="admin"${a.role==='admin'?' selected':''}>管理员</option><option value="demo"${a.role==='demo'?' selected':''}>演示</option></select></td><td style="padding:6px;font-size:12px">${ghInfo}</td><td style="padding:6px;font-size:13px">${bookInfo}</td><td style="padding:6px"><span title="${a.password_locked ? '密码已锁定' : '密码可修改'}">${a.password_locked ? '🔒' : '🔓'}</span> <button class="btn btn-sm btn-toggle-pwd-lock" data-action="toggle-pwd-lock" style="font-size:11px;padding:1px 6px">${a.password_locked ? '解锁' : '锁定'}</button></td><td style="padding:6px;color:var(--text-light);font-size:12px">${a.created_at ? a.created_at.slice(0,10) : '-'}</td><td style="padding:6px;text-align:right"><button class="btn btn-sm btn-danger btn-delete-admin" data-action="delete-admin">删除</button></td></tr>`;
           }).join('') +
           '</tbody></table>';
       } catch {}
@@ -1291,6 +1293,8 @@
         togglePwdLock(id, lock ? 0 : 1);
       } else if (e.target.classList.contains('btn-delete-admin')) {
         deleteAdmin(id, name);
+      } else if (e.target.classList.contains('btn-view-user-books')) {
+        showUserBooks(id, name);
       }
     });
     document.getElementById('admin-users-list').addEventListener('change', function(e) {
@@ -1317,6 +1321,17 @@
         document.getElementById('new-admin-pwd-lock').checked = false;
         loadAdminUsers();
       } catch(e) { showMsg('admin-user-msg', e.message, 'error'); }
+    }
+
+    function showUserBooks(userId, username) {
+      const books = _booksCache.filter(b => b.created_by === userId);
+      if (books.length === 0) { alert(`${username} 没有创建任何书籍`); return; }
+      const statusLabel = s => s === 'deleted' ? '🗑️待删除' : s === 'unlisted' ? '⚠️已下架' : '';
+      const list = books.map(b => {
+        const sl = statusLabel(b.status);
+        return `• ${b.title}（${b.chapter_count}章 / ${b.total_words}字）${sl ? ' ' + sl : ''}`;
+      }).join('\n');
+      alert(`${username} 的书籍（${books.length}本）：\n\n${list}`);
     }
 
     async function deleteAdmin(id, username) {

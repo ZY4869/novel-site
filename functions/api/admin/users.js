@@ -9,7 +9,9 @@ export async function onRequestGet(context) {
   if (!requireSuperAdmin(auth)) return Response.json({ error: '仅超级管理员可管理用户' }, { status: 403 });
 
   const { results } = await env.DB.prepare(
-    "SELECT id, username, role, password_locked, github_id, github_login, avatar_url, created_at, updated_at FROM admin_users ORDER BY id"
+    `SELECT u.id, u.username, u.role, u.password_locked, u.github_id, u.github_login, u.avatar_url, u.created_at, u.updated_at,
+      (SELECT COUNT(*) FROM books WHERE created_by = u.id) as book_count
+    FROM admin_users u ORDER BY u.id`
   ).all();
   return Response.json({ admins: results });
 }
