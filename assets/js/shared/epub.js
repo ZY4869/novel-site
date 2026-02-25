@@ -52,11 +52,20 @@ function extractChapterText(html) {
   return { title, content };
 }
 
+function safeQuerySelector(doc, selector) {
+  try {
+    return doc.querySelector(selector);
+  } catch {
+    return null;
+  }
+}
+
 function getMeta(doc, tag) {
+  const safeTag = String(tag || '').replace(/:/g, '\\:');
   const el =
-    doc.querySelector(`metadata ${tag}`) ||
-    doc.querySelector(`metadata ${tag.replace('dc:', '')}`) ||
-    doc.getElementsByTagNameNS('http://purl.org/dc/elements/1.1/', tag.replace('dc:', ''))?.[0];
+    safeQuerySelector(doc, `metadata ${safeTag}`) ||
+    safeQuerySelector(doc, `metadata ${String(tag || '').replace('dc:', '')}`) ||
+    doc.getElementsByTagNameNS('http://purl.org/dc/elements/1.1/', String(tag || '').replace('dc:', ''))?.[0];
   return el ? String(el.textContent || '').trim() : '';
 }
 
@@ -69,4 +78,3 @@ function normalizePath(p) {
   });
   return parts.join('/');
 }
-
