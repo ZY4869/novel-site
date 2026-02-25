@@ -1,5 +1,5 @@
 // Service Worker for 我的书架 PWA
-const CACHE_NAME = 'novel-site-v9';
+const CACHE_NAME = 'novel-site-v10';
 
 // 预缓存优先使用 pretty URL（Cloudflare Pages 默认会将 *.html 308 到无扩展名）
 const APP_SHELL = [
