@@ -11,17 +11,19 @@ export async function onRequestGet(context) {
     isAdmin = auth.ok;
   }
 
-  // 管理员看到所有书（含下架/待删除），普通访客只看 normal
-  const statusFilter = isAdmin ? '' : "WHERE (b.status IS NULL OR b.status = 'normal')";
-  const { results } = await env.DB.prepare(`
-    SELECT b.id, b.title, b.author, b.description, b.cover_key, b.created_at, b.updated_at,
-      b.created_by, b.status, b.delete_at,
-      (SELECT COUNT(*) FROM chapters WHERE book_id = b.id) as chapter_count,
-      (SELECT COALESCE(SUM(word_count), 0) FROM chapters WHERE book_id = b.id) as total_words
-    FROM books b
-    ${statusFilter}
-    ORDER BY b.updated_at DESC
-  `).all();
+  // 🟡-5: 使用独立查询语句，避免字符串拼接 SQL
+  const query = isAdmin
+    ? `SELECT b.id, b.title, b.author, b.description, b.cover_key, b.created_at, b.updated_at,
+        b.created_by, b.status, b.delete_at,
+        (SELECT COUNT(*) FROM chapters WHERE book_id = b.id) as chapter_count,
+        (SELECT COALESCE(SUM(word_count), 0) FROM chapters WHERE book_id = b.id) as total_words
+      FROM books b ORDER BY b.updated_at DESC`
+    : `SELECT b.id, b.title, b.author, b.description, b.cover_key, b.created_at, b.updated_at,
+        b.created_by, b.status, b.delete_at,
+        (SELECT COUNT(*) FROM chapters WHERE book_id = b.id) as chapter_count,
+        (SELECT COALESCE(SUM(word_count), 0) FROM chapters WHERE book_id = b.id) as total_words
+      FROM books b WHERE (b.status IS NULL OR b.status = 'normal') ORDER BY b.updated_at DESC`;
+  const { results } = await env.DB.prepare(query).all();
 
   // 非管理员请求不返回敏感字段
   if (!isAdmin) {
@@ -68,10 +70,18 @@ async function purgeExpiredBooks(env) {
       "SELECT id, cover_key FROM books WHERE status = 'deleted' AND delete_at IS NOT NULL AND delete_at < datetime('now')"
     ).all();
     for (const book of expired) {
+      // 🟡-3: CAS — 标记为 purging 防止并发 worker 重复处理
+      const { meta } = await env.DB.prepare(
+        "UPDATE books SET status = 'purging' WHERE id = ? AND status = 'deleted'"
+      ).bind(book.id).run();
+      if (!meta.changes) continue; // 另一个 worker 已在处理
+
+      // 收集 R2 keys
       const { results: chapters } = await env.DB.prepare('SELECT content_key FROM chapters WHERE book_id = ?').bind(book.id).all();
-      const r2Deletes = chapters.map(c => env.R2.delete(c.content_key).catch(() => {}));
-      if (book.cover_key) r2Deletes.push(env.R2.delete(book.cover_key).catch(() => {}));
-      await Promise.all(r2Deletes);
+      const r2Keys = chapters.map(c => c.content_key);
+      if (book.cover_key) r2Keys.push(book.cover_key);
+
+      // 🟡-2: 先删 DB（原子），再删 R2（失败不影响一致性）
       await env.DB.batch([
         env.DB.prepare('DELETE FROM chapter_stats WHERE chapter_id IN (SELECT id FROM chapters WHERE book_id = ?)').bind(book.id),
         env.DB.prepare('DELETE FROM book_stats WHERE book_id = ?').bind(book.id),
@@ -79,6 +89,7 @@ async function purgeExpiredBooks(env) {
         env.DB.prepare('DELETE FROM chapters WHERE book_id = ?').bind(book.id),
         env.DB.prepare('DELETE FROM books WHERE id = ?').bind(book.id),
       ]);
+      await Promise.all(r2Keys.map(k => env.R2.delete(k).catch(() => {})));
     }
   } catch (e) {
     console.error('purgeExpiredBooks error:', e);

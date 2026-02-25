@@ -54,6 +54,12 @@ export async function onRequestDelete(context) {
     return Response.json({ error: '只能删除自己创建的书籍' }, { status: 403 });
   }
 
+  // 🔴-3: 已在回收站的书不能重复软删除（防 delete_at 无限续期）
+  const currentStatus = book.status || 'normal';
+  if (currentStatus === 'deleted') {
+    return Response.json({ error: '书籍已在回收站中' }, { status: 400 });
+  }
+
   // 软删除：标记为 deleted，30天后自动清理
   const deleteAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   await env.DB.prepare(
@@ -64,6 +70,8 @@ export async function onRequestDelete(context) {
 }
 
 // POST /api/admin/books/:id — 状态变更
+const VALID_ACTIONS = ['unlist', 'restore', 'purge'];
+
 export async function onRequestPost(context) {
   const { request, env, params } = context;
   const { denied, auth } = await authCheck(request, env);
@@ -81,9 +89,18 @@ export async function onRequestPost(context) {
   if (!body || !body.action) return Response.json({ error: 'Missing action' }, { status: 400 });
 
   const { action } = body;
+  // 🟡-6: 入口白名单校验
+  if (!VALID_ACTIONS.includes(action)) {
+    return Response.json({ error: 'Unknown action' }, { status: 400 });
+  }
+
+  const currentStatus = book.status || 'normal';
 
   if (action === 'unlist') {
-    // 下架
+    // 🔴-1: 只有 normal 状态可以下架
+    if (currentStatus !== 'normal') {
+      return Response.json({ error: '只有正常状态的书籍可以下架' }, { status: 400 });
+    }
     await env.DB.prepare(
       "UPDATE books SET status = 'unlisted', delete_at = NULL, updated_at = datetime('now') WHERE id = ?"
     ).bind(params.id).run();
@@ -91,7 +108,10 @@ export async function onRequestPost(context) {
   }
 
   if (action === 'restore') {
-    // 恢复上架（从下架或待删除状态恢复）
+    // 🔴-2: 只有 unlisted/deleted 可以恢复
+    if (currentStatus === 'normal') {
+      return Response.json({ error: '书籍已是正常状态' }, { status: 400 });
+    }
     await env.DB.prepare(
       "UPDATE books SET status = 'normal', delete_at = NULL, updated_at = datetime('now') WHERE id = ?"
     ).bind(params.id).run();
@@ -99,15 +119,19 @@ export async function onRequestPost(context) {
   }
 
   if (action === 'purge') {
-    // 永久删除（仅超管可用）
+    // 🟡-1: 只有 deleted 状态可以永久删除
+    if (currentStatus !== 'deleted') {
+      return Response.json({ error: '只能永久删除已在回收站中的书籍' }, { status: 400 });
+    }
     if (!requireMinRole(auth, 'super_admin')) {
       return Response.json({ error: '仅超级管理员可永久删除' }, { status: 403 });
     }
+    // 先删 DB（batch 原子），再删 R2（🟡-2: 顺序调整）
     const { results: chapters } = await env.DB.prepare('SELECT content_key FROM chapters WHERE book_id = ?')
       .bind(params.id).all();
-    const r2Deletes = chapters.map(c => env.R2.delete(c.content_key).catch(() => {}));
-    if (book.cover_key) r2Deletes.push(env.R2.delete(book.cover_key).catch(() => {}));
-    await Promise.all(r2Deletes);
+    const r2Keys = chapters.map(c => c.content_key);
+    if (book.cover_key) r2Keys.push(book.cover_key);
+
     await env.DB.batch([
       env.DB.prepare('DELETE FROM chapter_stats WHERE chapter_id IN (SELECT id FROM chapters WHERE book_id = ?)').bind(params.id),
       env.DB.prepare('DELETE FROM book_stats WHERE book_id = ?').bind(params.id),
@@ -115,8 +139,8 @@ export async function onRequestPost(context) {
       env.DB.prepare('DELETE FROM chapters WHERE book_id = ?').bind(params.id),
       env.DB.prepare('DELETE FROM books WHERE id = ?').bind(params.id),
     ]);
+    // R2 删除在 DB 之后，失败不影响数据一致性
+    await Promise.all(r2Keys.map(k => env.R2.delete(k).catch(() => {})));
     return Response.json({ success: true, message: '书籍已永久删除' });
   }
-
-  return Response.json({ error: 'Unknown action' }, { status: 400 });
 }

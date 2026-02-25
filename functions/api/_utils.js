@@ -110,6 +110,10 @@ async function ensureSchema(env) {
     try {
       await env.DB.prepare('ALTER TABLE books ADD COLUMN delete_at TEXT DEFAULT NULL').run();
     } catch {}
+    // 🟢-4: 回填已有书籍的 status（ALTER TABLE 不回填默认值到已有行）
+    try {
+      await env.DB.prepare("UPDATE books SET status = 'normal' WHERE status IS NULL").run();
+    } catch {}
     // 所有迁移成功完成，标记为已完成
     _schemaEnsured = true;
   } catch (e) {
