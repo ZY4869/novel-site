@@ -112,6 +112,35 @@ const CANONICAL_PAGE = new Map([
   ['/comic-read.html', '/comic-read'],
 ]);
 
+const PRECACHE_FALLBACK_PAGE = new Map([
+  ['/', '/index.html'],
+  ['/book', '/book.html'],
+  ['/read', '/read.html'],
+  ['/comics', '/comics.html'],
+  ['/comic-read', '/comic-read.html'],
+]);
+
+async function precacheAppShell(cache) {
+  for (const url of APP_SHELL) {
+    try {
+      await cache.add(url);
+      continue;
+    } catch (err) {
+      const fallback = PRECACHE_FALLBACK_PAGE.get(url);
+      if (fallback) {
+        try {
+          const res = await fetch(fallback, { redirect: 'follow' });
+          if (res.ok) {
+            await cache.put(url, res);
+            continue;
+          }
+        } catch (fallbackErr) { /* ignore */ }
+      }
+      console.warn('[sw] precache skip', url, String(err));
+    }
+  }
+}
+
 function isSourceDownload(pathname) {
   return /^\/api\/books\/\d+\/source$/.test(pathname) || /^\/api\/comics\/\d+\/source$/.test(pathname);
 }
@@ -128,7 +157,7 @@ function shouldCacheApiResponse(url, res) {
 // Install: cache app shell
 self.addEventListener('install', (e) => {
   e.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then(cache => precacheAppShell(cache)).then(() => self.skipWaiting())
   );
 });
 
