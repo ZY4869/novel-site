@@ -102,6 +102,14 @@ async function ensureSchema(env) {
     try {
       await env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_chapters_book_sort ON chapters(book_id, sort_order)').run();
     } catch {}
+    // 书籍状态：normal(正常) / unlisted(下架) / deleted(待删除)
+    try {
+      await env.DB.prepare("ALTER TABLE books ADD COLUMN status TEXT DEFAULT 'normal'").run();
+    } catch {}
+    // 书籍定时删除时间
+    try {
+      await env.DB.prepare('ALTER TABLE books ADD COLUMN delete_at TEXT DEFAULT NULL').run();
+    } catch {}
     // 所有迁移成功完成，标记为已完成
     _schemaEnsured = true;
   } catch (e) {

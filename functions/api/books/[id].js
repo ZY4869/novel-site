@@ -10,12 +10,20 @@ export async function onRequestGet(context) {
   }
 
   const book = await env.DB.prepare(
-    'SELECT id, title, author, description, cover_key, created_at, updated_at FROM books WHERE id = ?'
+    'SELECT id, title, author, description, cover_key, status, created_at, updated_at FROM books WHERE id = ?'
   ).bind(id).first();
 
   if (!book) {
     return Response.json({ error: 'Book not found' }, { status: 404 });
   }
+
+  // 下架或待删除的书籍，公开访问返回404
+  if (book.status && book.status !== 'normal') {
+    return Response.json({ error: 'Book not found' }, { status: 404 });
+  }
+
+  // 不暴露 status 字段给公开 API
+  delete book.status;
 
   const { results: chapters } = await env.DB.prepare(`
     SELECT id, title, sort_order, word_count, created_at, updated_at

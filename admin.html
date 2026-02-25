@@ -929,16 +929,42 @@
         _booksCache = data.books;
         el.innerHTML=data.books.map(b=>{
           const isOwner = currentRole !== 'demo' || b.created_by === currentUserId;
+          const status = b.status || 'normal';
+          const isDeleted = status === 'deleted';
+          const isUnlisted = status === 'unlisted';
+          const dimmed = !isOwner || isDeleted;
+
+          // 状态标签
+          let statusBadge = '';
+          if (isDeleted && b.delete_at) {
+            const days = Math.max(0, Math.ceil((new Date(b.delete_at) - Date.now()) / 86400000));
+            statusBadge = `<span style="font-size:11px;color:#e74c3c;background:#fde8e8;padding:1px 6px;border-radius:3px;margin-left:6px">🗑️ ${days}天后删除</span>`;
+          } else if (isUnlisted) {
+            statusBadge = '<span style="font-size:11px;color:#e67e22;background:#fef3e2;padding:1px 6px;border-radius:3px;margin-left:6px">已下架</span>';
+          }
+
+          // 操作按钮
+          let actions = '';
+          if (isOwner) {
+            actions += '<button class="btn btn-sm btn-edit-book">编辑</button>';
+            if (isDeleted) {
+              actions += ' <button class="btn btn-sm btn-restore-book" style="background:#27ae60;color:#fff">恢复</button>';
+            } else if (isUnlisted) {
+              actions += ' <button class="btn btn-sm btn-restore-book" style="background:#27ae60;color:#fff">上架</button>';
+              actions += ' <button class="btn btn-sm btn-danger btn-delete-book">删除</button>';
+            } else {
+              actions += ' <button class="btn btn-sm btn-unlist-book" style="background:#e67e22;color:#fff">下架</button>';
+              actions += ' <button class="btn btn-sm btn-danger btn-delete-book">删除</button>';
+            }
+          }
+
           return `
-          <li data-id="${b.id}"${!isOwner ? ' style="opacity:0.6"' : ''}>
+          <li data-id="${b.id}"${dimmed ? ' style="opacity:0.65"' : ''}>
             <div class="item-info">
-              <div class="item-title">${esc(b.title)}${currentRole === 'demo' && !isOwner ? ' <span style="font-size:11px;color:var(--text-light)">(他人)</span>' : ''}</div>
+              <div class="item-title">${esc(b.title)}${statusBadge}${currentRole === 'demo' && !isOwner ? ' <span style="font-size:11px;color:var(--text-light)">(他人)</span>' : ''}</div>
               <div class="item-meta">${b.author?esc(b.author)+' · ':''}${b.chapter_count} 章 · ${b.total_words} 字</div>
             </div>
-            <div class="item-actions">
-              ${isOwner ? '<button class="btn btn-sm btn-edit-book">编辑</button>' : ''}
-              ${isOwner ? '<button class="btn btn-sm btn-danger btn-delete-book">删除</button>' : ''}
-            </div>
+            <div class="item-actions">${actions}</div>
           </li>
         `}).join('');
       } catch(e) {
@@ -958,7 +984,9 @@
         openBookEditOverlay(book);
       } else if (e.target.classList.contains('btn-delete-book')) {
         const btn = e.target;
-        if (!confirm(`确定删除「${book.title}」及其所有章节？此操作不可恢复！`)) return;
+        const isAlreadyDeleted = (book.status || 'normal') === 'deleted';
+        if (isAlreadyDeleted) return; // 已在回收站
+        if (!confirm(`确定删除「${book.title}」？\n\n书籍将移入回收站，30天后自动永久删除。\n期间可随时恢复。`)) return;
         btn.disabled = true;
         btn.textContent = '删除中...';
         btn.style.opacity = '0.6';
@@ -970,6 +998,27 @@
           btn.disabled = false;
           btn.textContent = '删除';
           btn.style.opacity = '';
+        });
+      } else if (e.target.classList.contains('btn-unlist-book')) {
+        const btn = e.target;
+        if (!confirm(`确定下架「${book.title}」？\n\n下架后首页不再显示，读者无法阅读。`)) return;
+        btn.disabled = true;
+        api('POST',`/api/admin/books/${id}`,{action:'unlist'}).then(r=>r.json()).then(d=>{
+          if (!d.success&&d.error) throw new Error(d.error);
+          refreshAllBooks();
+        }).catch(err=>{
+          alert('下架失败：'+err.message);
+          btn.disabled = false;
+        });
+      } else if (e.target.classList.contains('btn-restore-book')) {
+        const btn = e.target;
+        btn.disabled = true;
+        api('POST',`/api/admin/books/${id}`,{action:'restore'}).then(r=>r.json()).then(d=>{
+          if (!d.success&&d.error) throw new Error(d.error);
+          refreshAllBooks();
+        }).catch(err=>{
+          alert('恢复失败：'+err.message);
+          btn.disabled = false;
         });
       }
     });

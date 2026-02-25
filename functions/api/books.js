@@ -11,20 +11,24 @@ export async function onRequestGet(context) {
     isAdmin = auth.ok;
   }
 
-  // 始终查询 created_by，在非管理员响应中过滤掉
+  // 管理员看到所有书（含下架/待删除），普通访客只看 normal
+  const statusFilter = isAdmin ? '' : "WHERE (b.status IS NULL OR b.status = 'normal')";
   const { results } = await env.DB.prepare(`
     SELECT b.id, b.title, b.author, b.description, b.cover_key, b.created_at, b.updated_at,
-      b.created_by,
+      b.created_by, b.status, b.delete_at,
       (SELECT COUNT(*) FROM chapters WHERE book_id = b.id) as chapter_count,
       (SELECT COALESCE(SUM(word_count), 0) FROM chapters WHERE book_id = b.id) as total_words
     FROM books b
+    ${statusFilter}
     ORDER BY b.updated_at DESC
   `).all();
 
-  // 非管理员请求不返回 created_by
+  // 非管理员请求不返回敏感字段
   if (!isAdmin) {
     for (const book of results) {
       delete book.created_by;
+      delete book.status;
+      delete book.delete_at;
     }
   }
 
@@ -48,5 +52,35 @@ export async function onRequestGet(context) {
     book.tags = tagsByBook[book.id] || [];
   }
 
-  return Response.json({ books: results });
+  const response = Response.json({ books: results });
+
+  // 10% 概率异步清理过期的待删除书籍
+  if (Math.random() < 0.1) {
+    context.waitUntil(purgeExpiredBooks(env));
+  }
+
+  return response;
+}
+
+async function purgeExpiredBooks(env) {
+  try {
+    const { results: expired } = await env.DB.prepare(
+      "SELECT id, cover_key FROM books WHERE status = 'deleted' AND delete_at IS NOT NULL AND delete_at < datetime('now')"
+    ).all();
+    for (const book of expired) {
+      const { results: chapters } = await env.DB.prepare('SELECT content_key FROM chapters WHERE book_id = ?').bind(book.id).all();
+      const r2Deletes = chapters.map(c => env.R2.delete(c.content_key).catch(() => {}));
+      if (book.cover_key) r2Deletes.push(env.R2.delete(book.cover_key).catch(() => {}));
+      await Promise.all(r2Deletes);
+      await env.DB.batch([
+        env.DB.prepare('DELETE FROM chapter_stats WHERE chapter_id IN (SELECT id FROM chapters WHERE book_id = ?)').bind(book.id),
+        env.DB.prepare('DELETE FROM book_stats WHERE book_id = ?').bind(book.id),
+        env.DB.prepare('DELETE FROM book_tags WHERE book_id = ?').bind(book.id),
+        env.DB.prepare('DELETE FROM chapters WHERE book_id = ?').bind(book.id),
+        env.DB.prepare('DELETE FROM books WHERE id = ?').bind(book.id),
+      ]);
+    }
+  } catch (e) {
+    console.error('purgeExpiredBooks error:', e);
+  }
 }
