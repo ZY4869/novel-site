@@ -24,11 +24,15 @@
         <h3>🔐 管理员登录</h3>
         <div class="form-group">
           <label>用户名</label>
-          <input type="text" id="login-user" placeholder="admin" value="admin">
+          <input type="text" id="login-user" placeholder="用户名">
         </div>
         <div class="form-group">
           <label>密码</label>
           <input type="password" id="login-pass" placeholder="输入管理密码" onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px">
+          <input type="checkbox" id="remember-login" style="margin:0">
+          <label for="remember-login" style="font-size:13px;color:var(--text-light);cursor:pointer;user-select:none">记住登录状态</label>
         </div>
         <button class="btn" onclick="doLogin()" style="width:100%">登录</button>
         <div id="login-msg" style="margin-top:8px"></div>
@@ -450,10 +454,27 @@
     }
 
     // ===== 认证 =====
-    let authToken = sessionStorage.getItem('auth_token') || '';
-    let currentRole = sessionStorage.getItem('auth_role') || '';
-    let currentUserId = Number(sessionStorage.getItem('auth_uid')) || 0;
+    let authToken = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token') || '';
+    let currentRole = localStorage.getItem('auth_role') || sessionStorage.getItem('auth_role') || '';
+    let currentUserId = Number(localStorage.getItem('auth_uid') || sessionStorage.getItem('auth_uid')) || 0;
     let currentPasswordLocked = false;
+    // 记住登录偏好
+    let rememberLogin = localStorage.getItem('remember_login') === 'true';
+
+    function saveAuth(token, role, uid) {
+      authToken = token; currentRole = role; currentUserId = uid;
+      const store = rememberLogin ? localStorage : sessionStorage;
+      store.setItem('auth_token', token);
+      store.setItem('auth_role', role);
+      store.setItem('auth_uid', uid);
+      // 清理另一个存储
+      const other = rememberLogin ? sessionStorage : localStorage;
+      other.removeItem('auth_token'); other.removeItem('auth_role'); other.removeItem('auth_uid');
+    }
+    function clearAuth() {
+      authToken = ''; currentRole = ''; currentUserId = 0;
+      ['auth_token','auth_role','auth_uid'].forEach(k => { localStorage.removeItem(k); sessionStorage.removeItem(k); });
+    }
 
     function getToken() { return authToken; }
 
@@ -463,14 +484,30 @@
       location.href = '/api/auth?action=github-login';
     }
 
+    // 初始化登录表单
+    (function initLoginForm() {
+      const rememberCb = document.getElementById('remember-login');
+      rememberCb.checked = rememberLogin;
+      rememberCb.addEventListener('change', () => {
+        rememberLogin = rememberCb.checked;
+        localStorage.setItem('remember_login', rememberLogin);
+      });
+      // 恢复上次用户名
+      const lastUser = localStorage.getItem('last_username');
+      if (lastUser) document.getElementById('login-user').value = lastUser;
+    })();
+
     // 页面加载时检查 GitHub OAuth 回调 + 检查是否启用
     (function handleGitHubCallback() {
       const hash = location.hash;
       if (hash.startsWith('#github_token=')) {
         const token = hash.slice('#github_token='.length);
         if (token) {
+          // GitHub OAuth 默认记住登录
+          rememberLogin = true;
+          localStorage.setItem('remember_login', 'true');
           authToken = token;
-          sessionStorage.setItem('auth_token', token);
+          saveAuth(token, '', 0);
           history.replaceState(null, '', location.pathname);
           checkSession();
         }
@@ -499,12 +536,8 @@
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
-        authToken = data.token;
-        currentRole = data.role || 'demo';
-        currentUserId = data.userId || 0;
-        sessionStorage.setItem('auth_token', authToken);
-        sessionStorage.setItem('auth_role', currentRole);
-        sessionStorage.setItem('auth_uid', currentUserId);
+        localStorage.setItem('last_username', username);
+        saveAuth(data.token, data.role || 'demo', data.userId || 0);
         showAdminPanel(data.username, currentRole);
       } catch(e) { showMsg('login-msg', e.message, 'error'); }
     }
@@ -515,11 +548,11 @@
         const res = await fetch('/api/auth?action=me', {
           headers:{'Authorization':'Bearer '+authToken}
         });
-        if (!res.ok) { authToken=''; currentRole=''; currentUserId=0; sessionStorage.removeItem('auth_token'); sessionStorage.removeItem('auth_role'); sessionStorage.removeItem('auth_uid'); return false; }
+        if (!res.ok) { clearAuth(); return false; }
         const data = await res.json();
-        if (data.authenticated) { currentRole = data.role || 'demo'; currentUserId = data.userId || 0; currentPasswordLocked = !!data.passwordLocked; sessionStorage.setItem('auth_role', currentRole); sessionStorage.setItem('auth_uid', currentUserId); showAdminPanel(data.username, currentRole); return true; }
+        if (data.authenticated) { currentPasswordLocked = !!data.passwordLocked; saveAuth(authToken, data.role || 'demo', data.userId || 0); showAdminPanel(data.username, currentRole); return true; }
       } catch {}
-      authToken=''; currentRole=''; currentUserId=0; sessionStorage.removeItem('auth_token'); sessionStorage.removeItem('auth_role'); sessionStorage.removeItem('auth_uid');
+      clearAuth();
       return false;
     }
 
@@ -544,12 +577,7 @@
 
     async function doLogout() {
       try { await fetch('/api/auth?action=logout',{method:'POST',headers:{'Authorization':'Bearer '+authToken}}); } catch{}
-      authToken = '';
-      currentRole = '';
-      currentUserId = 0;
-      sessionStorage.removeItem('auth_token');
-      sessionStorage.removeItem('auth_role');
-      sessionStorage.removeItem('auth_uid');
+      clearAuth();
       document.getElementById('login-panel').style.display = 'block';
       document.getElementById('admin-panel').style.display = 'none';
       document.getElementById('user-info').style.display = 'none';
@@ -894,16 +922,15 @@
         _booksCache = data.books;
         el.innerHTML=data.books.map(b=>{
           const isOwner = currentRole !== 'demo' || b.created_by === currentUserId;
-          const canDelete = currentRole !== 'demo' || b.created_by === currentUserId;
           return `
-          <li data-id="${b.id}">
+          <li data-id="${b.id}"${!isOwner ? ' style="opacity:0.6"' : ''}>
             <div class="item-info">
               <div class="item-title">${esc(b.title)}${currentRole === 'demo' && !isOwner ? ' <span style="font-size:11px;color:var(--text-light)">(他人)</span>' : ''}</div>
               <div class="item-meta">${b.author?esc(b.author)+' · ':''}${b.chapter_count} 章 · ${b.total_words} 字</div>
             </div>
             <div class="item-actions">
               ${isOwner ? '<button class="btn btn-sm btn-edit-book">编辑</button>' : ''}
-              ${canDelete ? '<button class="btn btn-sm btn-danger btn-delete-book">删除</button>' : ''}
+              ${isOwner ? '<button class="btn btn-sm btn-danger btn-delete-book">删除</button>' : ''}
             </div>
           </li>
         `}).join('');

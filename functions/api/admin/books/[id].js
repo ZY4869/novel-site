@@ -56,12 +56,11 @@ export async function onRequestDelete(context) {
 
   const { results: chapters } = await env.DB.prepare('SELECT content_key FROM chapters WHERE book_id = ?')
     .bind(params.id).all();
-  for (const c of chapters) {
-    await env.R2.delete(c.content_key).catch(() => {});
-  }
 
-  // 删除封面
-  if (book.cover_key) await env.R2.delete(book.cover_key).catch(() => {});
+  // 并发删除 R2 文件（含封面），比串行快得多
+  const r2Deletes = chapters.map(c => env.R2.delete(c.content_key).catch(() => {}));
+  if (book.cover_key) r2Deletes.push(env.R2.delete(book.cover_key).catch(() => {}));
+  await Promise.all(r2Deletes);
 
   await env.DB.batch([
     env.DB.prepare('DELETE FROM chapter_stats WHERE chapter_id IN (SELECT id FROM chapters WHERE book_id = ?)').bind(params.id),
