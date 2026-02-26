@@ -409,3 +409,33 @@ export async function getGitHubClientSecret(env) {
   const row = await env.DB.prepare("SELECT value FROM site_settings WHERE key = 'github_client_secret'").first();
   return row?.value || null;
 }
+
+// 确保批注表存在（供未认证API调用）
+let _annoSchemaEnsured = false;
+export async function ensureAnnotationSchema(env) {
+  if (_annoSchemaEnsured) return;
+  try {
+    await env.DB.prepare(`CREATE TABLE IF NOT EXISTS annotations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chapter_id INTEGER NOT NULL,
+      book_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      para_idx INTEGER NOT NULL,
+      sent_idx INTEGER NOT NULL,
+      sent_hash TEXT NOT NULL,
+      sent_text TEXT NOT NULL,
+      content TEXT NOT NULL,
+      visibility TEXT NOT NULL DEFAULT 'public',
+      status TEXT NOT NULL DEFAULT 'normal',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE CASCADE,
+      FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES admin_users(id)
+    )`).run();
+    await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_anno_chapter ON annotations(chapter_id, para_idx, sent_idx)').run();
+    _annoSchemaEnsured = true;
+  } catch (e) {
+    console.error('ensureAnnotationSchema failed:', e);
+  }
+}

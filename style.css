@@ -98,6 +98,20 @@ body {
 }
 .navbar nav a:hover { color: var(--accent-dark); }
 
+/* 用户角色标签 */
+.role-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  vertical-align: middle;
+}
+.role-badge.super { background: #fce7f3; color: #be185d; }
+.role-badge.admin { background: #dbeafe; color: #1d4ed8; }
+.role-badge.demo { background: #dcfce7; color: #15803d; }
+.role-badge.guest { background: var(--bg); color: var(--text-light); border: 1px solid var(--border); }
+
 /* 主题切换按钮 */
 .theme-toggle {
   background: none;
@@ -855,8 +869,6 @@ body.immersive .pager-tap-right { bottom: 0; }
   user-select: none;
 }
 .anno-float-btn.visible { display: flex; }
-  user-select: none;
-}
 
 /* 批注编辑器 */
 .anno-editor {
@@ -922,6 +934,33 @@ body.immersive .pager-tap-right { bottom: 0; }
 .anno-editor-actions { display: flex; gap: 6px; }
 .anno-submit-btn { background: var(--accent, #6366f1) !important; color: #fff !important; }
 
+/* 字数统计 */
+.anno-input-wrap {
+  position: relative;
+}
+.anno-char-count {
+  position: absolute;
+  bottom: 8px;
+  right: 10px;
+  font-size: 11px;
+  color: var(--text-light, #999);
+  pointer-events: none;
+}
+.anno-char-count.warn {
+  color: #ef4444;
+}
+
+/* 快捷键提示 */
+.anno-editor-hint {
+  font-size: 11px;
+  color: var(--text-light, #999);
+  text-align: center;
+  margin-top: 8px;
+}
+@media (max-width: 768px) {
+  .anno-editor-hint { display: none; }
+}
+
 /* 移动端底部抽屉 */
 @media (max-width: 768px) {
   .anno-editor {
@@ -942,29 +981,105 @@ body.immersive .pager-tap-right { bottom: 0; }
   display: none;
   background: var(--card-bg, #fff);
   border: 1px solid var(--border, #ddd);
-  border-radius: 10px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-  padding: 12px;
-  max-width: 320px;
-  max-height: 300px;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+  padding: 0;
+  max-width: 340px;
+  max-height: 360px;
+  overflow: hidden;
+}
+.anno-popover-header {
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--border, #eee);
+  position: sticky;
+  top: 0;
+  background: var(--card-bg, #fff);
+}
+.anno-sort-tabs {
+  display: flex;
+  gap: 4px;
+}
+.anno-sort-tab {
+  background: none;
+  border: none;
+  padding: 4px 12px;
+  font-size: 13px;
+  color: var(--text-light, #888);
+  cursor: pointer;
+  border-radius: 12px;
+  transition: all 0.2s;
+}
+.anno-sort-tab:hover {
+  background: var(--bg, #f5f5f5);
+}
+.anno-sort-tab.active {
+  background: var(--accent, #6366f1);
+  color: #fff;
+}
+.anno-popover-list {
+  padding: 8px 12px;
+  max-height: 280px;
   overflow-y: auto;
 }
 .anno-popover-item {
-  padding: 8px 0;
+  padding: 10px 0;
   border-bottom: 1px solid var(--border, #eee);
 }
 .anno-popover-item:last-child { border-bottom: none; }
 .anno-popover-content {
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.6;
   color: var(--text, #333);
-  margin-bottom: 4px;
+  word-break: break-word;
+}
+.anno-popover-content.truncated .anno-expand {
+  color: var(--accent, #6366f1);
+  cursor: pointer;
+}
+.anno-popover-content.truncated .anno-expand:hover {
+  text-decoration: underline;
+}
+.anno-popover-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 6px;
 }
 .anno-popover-meta {
   font-size: 12px;
   color: var(--text-light, #888);
 }
-.anno-popover-actions { margin-top: 4px; }
+.anno-popover-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.anno-like-btn {
+  background: none;
+  border: none;
+  padding: 2px 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 13px;
+  border-radius: 12px;
+  transition: all 0.2s;
+}
+.anno-like-btn:hover {
+  background: var(--bg, #f5f5f5);
+}
+.anno-like-btn .like-icon {
+  font-size: 14px;
+}
+.anno-like-btn .like-count {
+  font-size: 12px;
+  color: var(--text-light, #888);
+  min-width: 12px;
+}
+.anno-like-btn.liked .like-count {
+  color: #ef4444;
+}
 .btn-link {
   background: none;
   border: none;

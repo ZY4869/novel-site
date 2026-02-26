@@ -1,4 +1,4 @@
-import { checkAdmin } from '../_utils.js';
+import { checkAdmin, ensureAnnotationSchema } from '../_utils.js';
 
 // GET /api/annotations/summary?chapterId=X
 // 返回章节内每个被批注句子的聚合统计（渲染下划线用）
@@ -11,6 +11,9 @@ export async function onRequestGet(context) {
   if (!chapterId || !/^\d{1,18}$/.test(chapterId)) {
     return Response.json({ error: 'invalid chapterId' }, { status: 400 });
   }
+
+  // 确保批注表存在
+  await ensureAnnotationSchema(env);
 
   // 可选认证：尝试获取用户信息，失败不阻断
   let userId = -1;

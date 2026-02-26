@@ -16,7 +16,7 @@
     <h1><a href="/">📚 我的书架</a></h1>
     <nav>
       <a href="https://github.com/xingzihai/novel-site" target="_blank" rel="noopener" title="GitHub">GitHub</a>
-      <a href="/admin.html">管理</a>
+      <a href="/admin.html" id="nav-admin">管理</a>
       <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">🌙</button>
     </nav>
   </div>
@@ -51,6 +51,26 @@
       const t = document.documentElement.getAttribute('data-theme');
       btn.textContent = THEME_ICONS[t] || '🌙';
     }
+
+    // 用户状态：登录后替换"管理"为角色+用户名
+    (async function renderUserStatus() {
+      const adminLink = document.getElementById('nav-admin');
+      const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+      if (!token) return; // 未登录保持"管理"
+      try {
+        const res = await fetch('/api/me', { headers: { 'Authorization': 'Bearer ' + token } });
+        if (res.ok) {
+          const user = await res.json();
+          const roleMap = {
+            'super_admin': { label: '超管', cls: 'super' },
+            'admin': { label: '管理', cls: 'admin' },
+            'demo': { label: '用户', cls: 'demo' }
+          };
+          const r = roleMap[user.role] || { label: '用户', cls: 'demo' };
+          adminLink.innerHTML = `<span class="role-badge ${r.cls}">${r.label}</span> ${user.username || ''}`;
+        }
+      } catch {}
+    })();
 
     // 继续阅读
     function renderContinueReading() {

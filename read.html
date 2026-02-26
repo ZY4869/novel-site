@@ -15,6 +15,7 @@
     <h1><a href="/">📚 我的书架</a></h1>
     <nav>
       <a href="#" id="back-link">返回目录</a>
+      <span id="nav-user"></span>
     </nav>
   </div>
   <div class="reader" id="reader-area">
@@ -114,7 +115,10 @@
   <!-- 批注：输入框 -->
   <div id="anno-editor" class="anno-editor" style="display:none">
     <div class="anno-editor-quote" id="anno-quote"></div>
-    <textarea id="anno-input" maxlength="500" placeholder="写下你的批注..."></textarea>
+    <div class="anno-input-wrap">
+      <textarea id="anno-input" maxlength="500" placeholder="写下你的批注..."></textarea>
+      <span class="anno-char-count"><span id="anno-char-num">0</span>/500</span>
+    </div>
     <div class="anno-editor-footer">
       <button id="anno-vis-btn" class="anno-vis-btn" type="button">🔒 仅自己可见</button>
       <div class="anno-editor-actions">
@@ -122,6 +126,7 @@
         <button class="btn btn-sm anno-submit-btn" id="anno-submit" type="button">发表</button>
       </div>
     </div>
+    <div class="anno-editor-hint">Ctrl+Enter 发表 · Esc 取消</div>
   </div>
 
   <!-- 批注：查看弹窗 -->
@@ -136,13 +141,28 @@
     let currentChapterId = null;
 
     async function fetchCurrentUser() {
-      if (!authToken) return;
+      const navUser = document.getElementById('nav-user');
+      if (!authToken) {
+        navUser.innerHTML = '<a href="/admin.html">管理</a>';
+        return;
+      }
       try {
         const res = await fetch('/api/me', { headers: { 'Authorization': 'Bearer ' + authToken } });
         if (res.ok) {
           currentUser = await res.json();
+          const roleMap = {
+            'super_admin': { label: '超管', cls: 'super' },
+            'admin': { label: '管理', cls: 'admin' },
+            'demo': { label: '用户', cls: 'demo' }
+          };
+          const r = roleMap[currentUser.role] || { label: '用户', cls: 'demo' };
+          navUser.innerHTML = `<a href="/admin.html"><span class="role-badge ${r.cls}">${r.label}</span> ${currentUser.username || ''}</a>`;
+        } else {
+          navUser.innerHTML = '<a href="/admin.html">管理</a>';
         }
-      } catch {}
+      } catch {
+        navUser.innerHTML = '<a href="/admin.html">管理</a>';
+      }
     }
 
     function annoApi(method, path, body) {
@@ -1121,11 +1141,17 @@
     }
 
     // --- 查看批注弹窗 ---
-    async function showAnnotationPopover(paraIdx, sentIdx, anchorEl) {
+    let popoverSort = 'latest';
+    let popoverContext = null; // { paraIdx, sentIdx, anchorEl }
+
+    async function showAnnotationPopover(paraIdx, sentIdx, anchorEl, sort = popoverSort) {
       const popover = document.getElementById('anno-popover');
+      popoverContext = { paraIdx, sentIdx, anchorEl };
+      popoverSort = sort;
+
       try {
         const res = await annoApi('GET',
-          `/api/annotations?chapterId=${currentChapterId}&paraIdx=${paraIdx}&sentIdx=${sentIdx}`);
+          `/api/annotations?chapterId=${currentChapterId}&paraIdx=${paraIdx}&sentIdx=${sentIdx}&sort=${sort}`);
         if (!res.ok) return;
         const { annotations } = await res.json();
 
@@ -1134,18 +1160,43 @@
           return;
         }
 
-        popover.innerHTML = annotations.map(a => `
-          <div class="anno-popover-item">
-            <div class="anno-popover-content">${esc(a.content)}</div>
-            <div class="anno-popover-meta">
-              ${esc(a.username || '匿名')} · ${timeAgo(a.created_at)}
-              ${a.visibility === 'private' ? ' · 🔒' : ''}
-            </div>
-            <div class="anno-popover-actions">
-              ${a.is_mine ? `<button class="btn-link anno-delete-btn" data-id="${Number(a.id)}">删除</button>` : ''}
+        const sortBtns = `
+          <div class="anno-popover-header">
+            <div class="anno-sort-tabs">
+              <button class="anno-sort-tab ${sort === 'latest' ? 'active' : ''}" data-sort="latest">最新</button>
+              <button class="anno-sort-tab ${sort === 'hot' ? 'active' : ''}" data-sort="hot">最热</button>
             </div>
           </div>
-        `).join('');
+        `;
+
+        const items = annotations.map(a => {
+          const content = a.content || '';
+          const isLong = content.length > 100;
+          const displayContent = isLong ? content.slice(0, 100) : content;
+          const likeCount = a.like_count || 0;
+          const liked = !!a.liked;
+
+          return `
+            <div class="anno-popover-item" data-id="${a.id}">
+              <div class="anno-popover-content ${isLong ? 'truncated' : ''}" data-full="${esc(content)}">${esc(displayContent)}${isLong ? '<span class="anno-expand">...展开</span>' : ''}</div>
+              <div class="anno-popover-footer">
+                <div class="anno-popover-meta">
+                  ${esc(a.username || '匿名')} · ${timeAgo(a.created_at)}
+                  ${a.visibility === 'private' ? ' · 🔒' : ''}
+                </div>
+                <div class="anno-popover-actions">
+                  <button class="anno-like-btn ${liked ? 'liked' : ''}" data-id="${a.id}">
+                    <span class="like-icon">${liked ? '❤️' : '🤍'}</span>
+                    <span class="like-count">${likeCount || ''}</span>
+                  </button>
+                  ${a.is_mine ? `<button class="btn-link anno-delete-btn" data-id="${a.id}">删除</button>` : ''}
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        popover.innerHTML = sortBtns + '<div class="anno-popover-list">' + items + '</div>';
 
         // 定位
         const rect = anchorEl.getBoundingClientRect();
@@ -1153,17 +1204,58 @@
         const popRect = popover.getBoundingClientRect();
         let top = rect.bottom + 8;
         let left = rect.left + rect.width / 2 - popRect.width / 2;
-        // 边界检测
         if (top + popRect.height > window.innerHeight) top = rect.top - popRect.height - 8;
         if (left < 8) left = 8;
         if (left + popRect.width > window.innerWidth - 8) left = window.innerWidth - popRect.width - 8;
         popover.style.top = top + 'px';
         popover.style.left = left + 'px';
 
-        // 事件委托绑定删除按钮（🟡-2 修复）
+        // 绑定事件
+        popover.querySelectorAll('.anno-sort-tab').forEach(btn => {
+          btn.onclick = () => showAnnotationPopover(paraIdx, sentIdx, anchorEl, btn.dataset.sort);
+        });
+        popover.querySelectorAll('.anno-expand').forEach(span => {
+          span.onclick = (e) => {
+            e.stopPropagation();
+            const contentEl = span.parentElement;
+            contentEl.textContent = contentEl.dataset.full;
+            contentEl.classList.remove('truncated');
+          };
+        });
+        popover.querySelectorAll('.anno-like-btn').forEach(btn => {
+          btn.onclick = (e) => {
+            e.stopPropagation();
+            toggleLike(Number(btn.dataset.id), btn);
+          };
+        });
         popover.querySelectorAll('.anno-delete-btn').forEach(btn => {
           btn.onclick = () => deleteAnnotation(Number(btn.dataset.id));
         });
+      } catch {}
+    }
+
+    async function toggleLike(annoId, btn) {
+      if (!currentUser) {
+        alert('请先登录');
+        return;
+      }
+      try {
+        const res = await annoApi('POST', `/api/annotations/${annoId}/like`);
+        if (!res.ok) return;
+        const { liked } = await res.json();
+        const icon = btn.querySelector('.like-icon');
+        const count = btn.querySelector('.like-count');
+        const currentCount = parseInt(count.textContent) || 0;
+        
+        if (liked) {
+          btn.classList.add('liked');
+          icon.textContent = '❤️';
+          count.textContent = currentCount + 1 || '1';
+        } else {
+          btn.classList.remove('liked');
+          icon.textContent = '🤍';
+          count.textContent = currentCount > 1 ? currentCount - 1 : '';
+        }
       } catch {}
     }
 
@@ -1221,24 +1313,23 @@
         if (sel && !sel.isCollapsed) e.preventDefault();
       });
 
-      // mouseup 后：抑制 Chrome 选中文本浮动工具栏 + 触发选区检测
+      // mouseup 后：立即检测选区并显示浮动按钮
       readerContent.addEventListener('mouseup', (e) => {
+        console.log('[anno] mouseup on readerContent', { target: e.target.id || e.target.className });
         // 如果点击的是浮动按钮，不要干扰选区
         if (e.target.closest('#anno-float-btn')) return;
+        // 短延迟确保选区稳定
         setTimeout(() => {
           const sel = window.getSelection();
           if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
-          // 保存当前选区，collapse 再恢复 — 绕过 Chrome 浮动工具栏
-          const range = sel.getRangeAt(0).cloneRange();
-          sel.removeAllRanges();
-          sel.addRange(range);
-          selHandler();
-        }, 10);
+          showFloatBtnForSelection(sel);
+        }, 50);
       });
 
       // 浮动按钮：mousedown 直接触发编辑器（比 click 更可靠）
       const floatBtn = document.getElementById('anno-float-btn');
       floatBtn.addEventListener('mousedown', (e) => {
+        console.log('[anno] floatBtn mousedown fired', { annoState: {...annoState} });
         e.preventDefault();
         e.stopPropagation();
         openAnnotationEditor();
@@ -1248,6 +1339,22 @@
       document.getElementById('anno-vis-btn').addEventListener('click', toggleVisibility);
       document.getElementById('anno-cancel').addEventListener('click', closeAnnotationEditor);
       document.getElementById('anno-submit').addEventListener('click', submitAnnotation);
+
+      // 字数统计
+      const annoInput = document.getElementById('anno-input');
+      annoInput.addEventListener('input', () => {
+        const len = annoInput.value.length;
+        document.getElementById('anno-char-num').textContent = len;
+        document.getElementById('anno-char-num').parentElement.classList.toggle('warn', len > 450);
+      });
+
+      // Ctrl+Enter 提交
+      annoInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault();
+          submitAnnotation();
+        }
+      });
 
       // 点击外部关闭弹窗
       document.addEventListener('click', (e) => {
@@ -1288,71 +1395,106 @@
             document.getElementById('anno-float-btn').classList.remove('visible');
             return;
           }
-          const anchorEl = sel.anchorNode?.nodeType === 3 ? sel.anchorNode.parentElement : sel.anchorNode;
-          const readerContent = document.querySelector('.reader-content');
-          if (!readerContent || !readerContent.contains(anchorEl)) return;
-
-          const p = anchorEl?.closest('p[data-para-idx]');
-          if (!p) return;
-
-          const paraIdx = parseInt(p.dataset.paraIdx);
-          const paraText = p.textContent;
-          const range = sel.getRangeAt(0);
-          const preRange = document.createRange();
-          preRange.setStart(p, 0);
-          preRange.setEnd(range.startContainer, range.startOffset);
-          const selStart = preRange.toString().length;
-          const selEnd = selStart + sel.toString().length;
-
-          const snapped = snapToSentence(paraText, selStart, selEnd);
-          if (!snapped) return;
-
-          annoState.paraIdx = paraIdx;
-          annoState.sentIdx = snapped.sentIdx;
-          annoState.sentText = snapped.text;
-
-          const rect = range.getBoundingClientRect();
-          const btn = document.getElementById('anno-float-btn');
-          btn.classList.add('visible');
-          btn.style.left = (rect.left + rect.width / 2 - 18) + 'px';
-          btn.style.top = (rect.top - 44) + 'px';
+          showFloatBtnForSelection(sel);
         }, 300);
       };
+    }
+
+    function showFloatBtnForSelection(sel) {
+      if (!sel || sel.isCollapsed || annoState.editing) {
+        document.getElementById('anno-float-btn').classList.remove('visible');
+        return;
+      }
+      const anchorEl = sel.anchorNode?.nodeType === 3 ? sel.anchorNode.parentElement : sel.anchorNode;
+      const readerContent = document.querySelector('.reader-content');
+      if (!readerContent || !readerContent.contains(anchorEl)) return;
+
+      const p = anchorEl?.closest('p[data-para-idx]');
+      if (!p) return;
+
+      const paraIdx = parseInt(p.dataset.paraIdx);
+      const paraText = p.textContent;
+      const range = sel.getRangeAt(0);
+      const preRange = document.createRange();
+      preRange.setStart(p, 0);
+      preRange.setEnd(range.startContainer, range.startOffset);
+      const selStart = preRange.toString().length;
+      const selEnd = selStart + sel.toString().length;
+
+      const snapped = snapToSentence(paraText, selStart, selEnd);
+      if (!snapped) return;
+
+      annoState.paraIdx = paraIdx;
+      annoState.sentIdx = snapped.sentIdx;
+      annoState.sentText = snapped.text;
+
+      const rect = range.getBoundingClientRect();
+      // 保存位置信息供编辑器使用（点击按钮时selection可能已清除）
+      annoState.selRect = { left: rect.left, top: rect.top, bottom: rect.bottom, width: rect.width };
+      const btn = document.getElementById('anno-float-btn');
+      console.log('[anno] showing floatBtn', { paraIdx, sentIdx: snapped.sentIdx, text: snapped.text.slice(0,30) });
+      btn.classList.add('visible');
+      btn.style.left = (rect.left + rect.width / 2 - 18) + 'px';
+      btn.style.top = (rect.top - 44) + 'px';
     }
 
     // --- 批注编辑器 ---
     async function openAnnotationEditor() {
       document.getElementById('anno-float-btn').classList.remove('visible');
 
-      annoState.editing = true;
-      annoState.sentHash = await sentenceHash(annoState.sentText);
-
-      const editor = document.getElementById('anno-editor');
-      document.getElementById('anno-quote').textContent = annoState.sentText;
-      document.getElementById('anno-input').value = '';
-      annoState.visibility = 'private';
-      const visBtn = document.getElementById('anno-vis-btn');
-      visBtn.textContent = '🔒 仅自己可见';
-      visBtn.classList.remove('public');
-
-      editor.style.display = 'block';
-      document.getElementById('anno-input').focus();
-
-      // PC 端定位到选区附近
-      if (window.innerWidth > 768) {
+      if (!annoState.sentText) {
+        console.warn('[anno] sentText empty, trying to recover from selection');
+        // 尝试从当前选区恢复
         const sel = window.getSelection();
         if (sel && !sel.isCollapsed) {
-          const rect = sel.getRangeAt(0).getBoundingClientRect();
+          showFloatBtnForSelection(sel);
+          if (!annoState.sentText) {
+            alert('未能识别选中的句子，请重新选择');
+            return;
+          }
+          // 恢复成功，继续
+        } else {
+          alert('请先选中一段文字');
+          return;
+        }
+      }
+
+      try {
+        annoState.editing = true;
+        annoState.sentHash = await sentenceHash(annoState.sentText);
+
+        const editor = document.getElementById('anno-editor');
+        document.getElementById('anno-quote').textContent = annoState.sentText;
+        document.getElementById('anno-input').value = '';
+        document.getElementById('anno-char-num').textContent = '0';
+        annoState.visibility = 'private';
+        const visBtn = document.getElementById('anno-vis-btn');
+        visBtn.textContent = '🔒 仅自己可见';
+        visBtn.classList.remove('public');
+
+        editor.style.display = 'block';
+        document.getElementById('anno-input').focus();
+
+        // PC 端定位到选区附近
+        if (window.innerWidth > 768 && annoState.selRect) {
+          const rect = annoState.selRect;
           editor.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 340)) + 'px';
           editor.style.top = (rect.bottom + 12) + 'px';
-          // 如果超出底部，放到上方
+          editor.style.transform = 'none';
           requestAnimationFrame(() => {
             const edRect = editor.getBoundingClientRect();
             if (edRect.bottom > window.innerHeight - 8) {
               editor.style.top = (rect.top - edRect.height - 12) + 'px';
             }
           });
+        } else if (window.innerWidth > 768) {
+          editor.style.left = '50%';
+          editor.style.top = '30%';
+          editor.style.transform = 'translateX(-50%)';
         }
+      } catch (e) {
+        console.error('[anno] openAnnotationEditor error:', e);
+        annoState.editing = false;
       }
     }
 
