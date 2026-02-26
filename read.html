@@ -516,9 +516,17 @@
       }
     }
 
-    // 翻页点击区域
-    pagerTapLeft.addEventListener('click', (e) => { e.stopPropagation(); pagerPrev(); });
-    pagerTapRight.addEventListener('click', (e) => { e.stopPropagation(); pagerNext(); });
+    // 翻页点击区域（有选区时不翻页，让批注交互优先）
+    pagerTapLeft.addEventListener('click', (e) => {
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed) return; // 有选区时不翻页
+      e.stopPropagation(); pagerPrev();
+    });
+    pagerTapRight.addEventListener('click', (e) => {
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed) return;
+      e.stopPropagation(); pagerNext();
+    });
 
     // 触摸滑动翻页
     let touchStartX = 0, touchStartY = 0, touchStartTime = 0;
@@ -1316,12 +1324,23 @@
       // mouseup 后：立即检测选区并显示浮动按钮
       readerContent.addEventListener('mouseup', (e) => {
         console.log('[anno] mouseup on readerContent', { target: e.target.id || e.target.className });
-        // 如果点击的是浮动按钮，不要干扰选区
         if (e.target.closest('#anno-float-btn')) return;
-        // 短延迟确保选区稳定
         setTimeout(() => {
           const sel = window.getSelection();
           if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+          showFloatBtnForSelection(sel);
+        }, 50);
+      });
+
+      // 翻页模式下 tap 区域会拦截 mouseup，用 document 级别 fallback
+      document.addEventListener('mouseup', (e) => {
+        if (settings.readingMode !== 'pager') return;
+        if (e.target.closest('#anno-float-btn') || e.target.closest('#anno-editor')) return;
+        setTimeout(() => {
+          const sel = window.getSelection();
+          if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+          const anchorEl = sel.anchorNode?.nodeType === 3 ? sel.anchorNode.parentElement : sel.anchorNode;
+          if (!anchorEl?.closest('.reader-content')) return;
           showFloatBtnForSelection(sel);
         }, 50);
       });

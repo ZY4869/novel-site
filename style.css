@@ -851,6 +851,39 @@ body.immersive .pager-tap-right { bottom: 0; }
   --anno-color-hover: rgba(91, 155, 213, 0.1);
 }
 
+/* 护眼绿适配 */
+[data-theme="green"] .annotated.private-only {
+  --anno-color: rgba(180, 120, 20, var(--anno-opacity, 0.5));
+  --anno-color-hover: rgba(180, 120, 20, 0.1);
+}
+[data-theme="green"] .annotated.has-public,
+[data-theme="green"] .annotated.has-both {
+  --anno-color: rgba(40, 100, 180, var(--anno-opacity, 0.5));
+  --anno-color-hover: rgba(40, 100, 180, 0.1);
+}
+
+/* 羊皮纸适配 */
+[data-theme="sepia"] .annotated.private-only {
+  --anno-color: rgba(190, 120, 10, var(--anno-opacity, 0.5));
+  --anno-color-hover: rgba(190, 120, 10, 0.1);
+}
+[data-theme="sepia"] .annotated.has-public,
+[data-theme="sepia"] .annotated.has-both {
+  --anno-color: rgba(50, 90, 160, var(--anno-opacity, 0.5));
+  --anno-color-hover: rgba(50, 90, 160, 0.1);
+}
+
+/* 蓝色主题适配 */
+[data-theme="blue"] .annotated.private-only {
+  --anno-color: rgba(220, 160, 40, var(--anno-opacity, 0.5));
+  --anno-color-hover: rgba(220, 160, 40, 0.1);
+}
+[data-theme="blue"] .annotated.has-public,
+[data-theme="blue"] .annotated.has-both {
+  --anno-color: rgba(100, 160, 230, var(--anno-opacity, 0.5));
+  --anno-color-hover: rgba(100, 160, 230, 0.1);
+}
+
 /* 浮动按钮 */
 .anno-float-btn {
   position: fixed;
