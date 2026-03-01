@@ -8,6 +8,13 @@ export function initStorage() {
   document.getElementById('clear-storage-limit-btn')?.addEventListener('click', clearStorageLimit);
   document.getElementById('storage-refresh-btn')?.addEventListener('click', () => loadStorageObjects(true));
   document.getElementById('storage-load-more')?.addEventListener('click', () => loadStorageObjects(false));
+
+  const details = document.getElementById('storage-details');
+  details?.addEventListener('toggle', () => {
+    if (!details.open) return;
+    const list = document.getElementById('storage-objects-list');
+    if (list && list.children.length === 0) loadStorageObjects(true);
+  });
 }
 
 export async function loadStorageSummary() {
@@ -137,4 +144,3 @@ function setText(id, v) {
   const el = document.getElementById(id);
   if (el) el.textContent = String(v ?? '');
 }
-

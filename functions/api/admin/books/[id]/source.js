@@ -1,5 +1,5 @@
 // PUT /api/admin/books/:id/source — 上传书籍源文件（不拆解保留）
-import { checkAdmin, validateId, checkBookOwnership, sanitizeFilename } from '../../../_utils.js';
+import { checkAdmin, validateId, checkBookOwnership, sanitizeFilename, parseNullableInt } from '../../../_utils.js';
 
 const MAX_SOURCE_BYTES = 200 * 1024 * 1024;
 
@@ -41,6 +41,11 @@ export async function onRequestPut(context) {
   const contentType = (request.headers.get('Content-Type') || '').trim() || 'application/octet-stream';
   if (!request.body) return Response.json({ error: 'Empty body' }, { status: 400 });
 
+  const parsedChapterCount = parseNullableInt(request.headers.get('X-Source-Chapter-Count'), { min: 0, max: 10000 });
+  const parsedWordCount = parseNullableInt(request.headers.get('X-Source-Word-Count'), { min: 0, max: 50000000 });
+  const sourceChapterCount = parsedChapterCount.ok ? parsedChapterCount.value : null;
+  const sourceWordCount = parsedWordCount.ok ? parsedWordCount.value : null;
+
   const key = `sources/books/${bookId}/${Date.now()}-${safeName}`;
 
   try {
@@ -54,9 +59,10 @@ export async function onRequestPut(context) {
     await env.DB.prepare(`
       UPDATE books
       SET source_key = ?, source_name = ?, source_type = ?, source_size = ?,
+          source_chapter_count = ?, source_word_count = ?,
           source_uploaded_at = datetime('now'), updated_at = datetime('now')
       WHERE id = ?
-    `).bind(key, safeName, contentType, size, bookId).run();
+    `).bind(key, safeName, contentType, size, sourceChapterCount, sourceWordCount, bookId).run();
   } catch (e) {
     console.error('Book source DB update error:', e);
     await env.R2.delete(key).catch(() => {});
@@ -68,6 +74,12 @@ export async function onRequestPut(context) {
     await env.R2.delete(book.source_key).catch(() => {});
   }
 
-  return Response.json({ success: true, source_key: key, source_name: safeName, source_size: size });
+  return Response.json({
+    success: true,
+    source_key: key,
+    source_name: safeName,
+    source_size: size,
+    source_chapter_count: sourceChapterCount,
+    source_word_count: sourceWordCount,
+  });
 }
-

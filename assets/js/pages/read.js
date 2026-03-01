@@ -12,6 +12,8 @@ import { initSourceRead } from '../read/source.js';
 import { initBookmarks } from '../read/bookmarks.js';
 import { initReadingStats } from '../read/stats.js';
 import { initImmersive } from '../read/immersive.js';
+import { initNavUser } from '../read/user.js';
+import { initAnnotations } from '../read/annotations/index.js';
 
 initReadDom();
 initReadState();
@@ -28,9 +30,11 @@ initImmersive();
 initShortcuts();
 initSiteSettings();
 initFonts();
+initNavUser();
 const q = new URLSearchParams(location.search);
 if (q.get('id')) initChapter();
 else if (q.get('book')) initSourceRead();
 else initChapter();
+initAnnotations();
 
 registerServiceWorker('/sw.js');

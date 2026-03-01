@@ -1,5 +1,5 @@
 // POST /api/admin/chapters — 创建新章节
-import { checkAdmin, validateId, parseJsonBody, checkBookOwnership } from '../_utils.js';
+import { checkAdmin, validateId, parseJsonBody, checkBookOwnership, requireMinRole } from '../_utils.js';
 
 const MAX_CONTENT_LENGTH = 500000; // 50万字
 
@@ -16,7 +16,7 @@ export async function onRequestPost(context) {
   const body = await parseJsonBody(request);
   if (!body) return Response.json({ error: 'Invalid JSON' }, { status: 400 });
 
-  const { book_id, title, content } = body;
+  const { book_id, title, content, sort_order: clientSortOrder } = body;
 
   if (!book_id || !validateId(String(book_id))) {
     return Response.json({ error: 'Valid book_id is required' }, { status: 400 });
@@ -43,10 +43,24 @@ export async function onRequestPost(context) {
     return Response.json({ error: '只能向自己创建的书籍添加章节' }, { status: 403 });
   }
 
-  const lastChapter = await env.DB.prepare(
-    'SELECT MAX(sort_order) as max_order FROM chapters WHERE book_id = ?'
-  ).bind(book_id).first();
-  const sortOrder = (lastChapter?.max_order || 0) + 1;
+  // demo 用户配额：每本书最多 200 章
+  if (!requireMinRole(auth, 'admin')) {
+    const { count } = await env.DB.prepare(
+      'SELECT COUNT(*) as count FROM chapters WHERE book_id = ?'
+    ).bind(book_id).first();
+    if (count >= 200) return Response.json({ error: '演示账号每本书最多 200 章' }, { status: 403 });
+  }
+
+  // sort_order：前端传了就用前端的（批量导入场景），否则自动递增（单章添加场景）
+  let sortOrder;
+  if (clientSortOrder !== undefined && Number.isInteger(Number(clientSortOrder)) && Number(clientSortOrder) > 0 && Number(clientSortOrder) <= 2147483647) {
+    sortOrder = Number(clientSortOrder);
+  } else {
+    const lastChapter = await env.DB.prepare(
+      'SELECT MAX(sort_order) as max_order FROM chapters WHERE book_id = ?'
+    ).bind(book_id).first();
+    sortOrder = (lastChapter?.max_order || 0) + 1;
+  }
   const wordCount = content.trim().length;
 
   // 先插入DB拿到chapterId，用占位content_key
@@ -58,6 +72,9 @@ export async function onRequestPost(context) {
     `).bind(book_id, title.trim(), sortOrder, wordCount, 'pending').run();
     chapterId = result.meta.last_row_id;
   } catch (err) {
+    if (err.message && err.message.includes('UNIQUE')) {
+      return Response.json({ success: true, duplicate: true, message: '章节已存在（重复请求）' });
+    }
     return Response.json({ error: 'Failed to create chapter' }, { status: 500 });
   }
 
@@ -72,11 +89,30 @@ export async function onRequestPost(context) {
   }
 
   // 更新content_key为最终值
-  await env.DB.prepare('UPDATE chapters SET content_key = ? WHERE id = ?')
-    .bind(contentKey, chapterId).run();
+  try {
+    await env.DB.prepare('UPDATE chapters SET content_key = ? WHERE id = ?')
+      .bind(contentKey, chapterId).run();
+  } catch (err) {
+    // content_key更新失败，回滚DB和R2
+    await env.DB.prepare('DELETE FROM chapters WHERE id = ?').bind(chapterId).run().catch(() => {});
+    await env.R2.delete(contentKey).catch(() => {});
+    return Response.json({ error: 'Failed to finalize chapter' }, { status: 500 });
+  }
 
   await env.DB.prepare("UPDATE books SET updated_at = datetime('now') WHERE id = ?")
     .bind(book_id).run();
+
+  // demo章节配额二次检查（防TOCTOU竞态绕过）
+  if (!requireMinRole(auth, 'admin')) {
+    const { count } = await env.DB.prepare(
+      'SELECT COUNT(*) as count FROM chapters WHERE book_id = ?'
+    ).bind(book_id).first();
+    if (count > 200) {
+      await env.DB.prepare('DELETE FROM chapters WHERE id = ?').bind(chapterId).run().catch(() => {});
+      await env.R2.delete(contentKey).catch(() => {});
+      return Response.json({ error: '演示账号每本书最多 200 章' }, { status: 403 });
+    }
+  }
 
   return Response.json({
     success: true,

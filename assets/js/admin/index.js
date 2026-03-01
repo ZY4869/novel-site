@@ -8,7 +8,7 @@ import { initChapters, loadChapters } from './chapters.js';
 import { initBatch } from './batch.js';
 import { initTxtImport } from './txtImport.js';
 import { initComics, loadComicList } from './comics.js';
-import { initStorage, loadStorageObjects, loadStorageSummary } from './storage.js';
+import { initStorage, loadStorageSummary } from './storage.js';
 import { initAdminUsers, loadAdminUsers } from './users.js';
 import { initBackup } from './backup.js';
 import { initFonts, loadFontList } from './fonts.js';
@@ -43,7 +43,6 @@ export function initAdminApp() {
       loadFontList();
       loadComicList();
       loadStorageSummary();
-      loadStorageObjects(true);
       loadTagList();
 
       if (role === 'super_admin') {
@@ -60,4 +59,3 @@ export function initAdminApp() {
 
   checkSession();
 }
-

@@ -42,7 +42,7 @@ async function loadChapter() {
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'reader-content';
-    contentDiv.textContent = data.content;
+    renderParagraphs(contentDiv, data.content);
 
     state.nav.prevUrl = data.prevChapter ? `/read?id=${data.prevChapter.id}` : null;
     state.nav.nextUrl = data.nextChapter ? `/read?id=${data.nextChapter.id}` : null;
@@ -69,6 +69,8 @@ async function loadChapter() {
     el.appendChild(contentDiv);
     el.appendChild(nav);
 
+    dispatchChapterRendered({ bookId: c.book_id, chapterId: c.id });
+
     const exportBtn = document.getElementById('export-btn');
     if (exportBtn) exportBtn.addEventListener('click', (e) => { e.preventDefault(); exportThis(); });
 
@@ -89,6 +91,30 @@ async function loadChapter() {
   } catch (e) {
     el.innerHTML = `<div class="msg msg-error">${esc(e.message)}</div>`;
   }
+}
+
+function renderParagraphs(container, content) {
+  const lines = String(content || '').split('\n');
+  const frag = document.createDocumentFragment();
+  let count = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const line = String(lines[i] || '').replace(/\r$/, '');
+    if (!line.trim()) continue;
+    const p = document.createElement('p');
+    p.dataset.paraIdx = String(i);
+    p.textContent = line;
+    frag.appendChild(p);
+    count++;
+  }
+  container.innerHTML = '';
+  if (count > 0) container.appendChild(frag);
+  else container.textContent = String(content || '');
+}
+
+function dispatchChapterRendered(detail) {
+  try {
+    document.dispatchEvent(new CustomEvent('read:chapter-rendered', { detail }));
+  } catch {}
 }
 
 async function fetchChapter(chapterId) {

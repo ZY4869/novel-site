@@ -25,6 +25,7 @@ export function initReadDom() {
   dom.backTop = document.getElementById('back-top');
   dom.navbarTitle = document.querySelector('.navbar h1 a');
   dom.backLink = document.getElementById('back-link');
+  dom.navUser = document.getElementById('nav-user');
   dom.readerArea = document.getElementById('reader-area');
   dom.breadcrumb = document.getElementById('breadcrumb');
   dom.content = document.getElementById('content');
@@ -98,4 +99,3 @@ function safeFloat(v, fallback) {
   const n = Number.parseFloat(String(v ?? ''));
   return Number.isFinite(n) ? n : fallback;
 }
-

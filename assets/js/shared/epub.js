@@ -23,16 +23,24 @@ async function parseEpubZip(zip, filename) {
 
   const manifest = new Map();
   opfDoc.querySelectorAll('manifest > item[id][href]').forEach((it) => {
-    manifest.set(it.getAttribute('id'), it.getAttribute('href'));
+    const id = it.getAttribute('id');
+    const href = it.getAttribute('href');
+    if (!id || !href) return;
+    manifest.set(id, {
+      href,
+      mediaType: it.getAttribute('media-type') || '',
+      properties: it.getAttribute('properties') || '',
+    });
   });
 
   const spineIds = Array.from(opfDoc.querySelectorAll('spine > itemref[idref]')).map((it) => it.getAttribute('idref'));
 
   const chapters = [];
   for (const idref of spineIds) {
-    const href = manifest.get(idref);
+    const item = manifest.get(idref);
+    const href = item?.href;
     if (!href) continue;
-    const fullPath = normalizePath(opfDir + href);
+    const fullPath = normalizePath(opfDir + stripFragment(href));
     const txt = await zip.file(fullPath)?.async('text');
     if (!txt) continue;
     const parsed = extractChapterText(txt);
@@ -41,7 +49,9 @@ async function parseEpubZip(zip, filename) {
   }
 
   if (chapters.length === 0) throw new Error('未解析到章节内容');
-  return { meta: { title, author, description }, chapters };
+
+  const cover = await extractEpubCover(zip, opfDoc, opfDir, manifest);
+  return { meta: { title, author, description }, chapters, cover };
 }
 
 function extractChapterText(html) {
@@ -67,6 +77,65 @@ function getMeta(doc, tag) {
     safeQuerySelector(doc, `metadata ${String(tag || '').replace('dc:', '')}`) ||
     doc.getElementsByTagNameNS('http://purl.org/dc/elements/1.1/', String(tag || '').replace('dc:', ''))?.[0];
   return el ? String(el.textContent || '').trim() : '';
+}
+
+function stripFragment(href) {
+  return String(href || '').split('#')[0].split('?')[0];
+}
+
+async function extractEpubCover(zip, opfDoc, opfDir, manifest) {
+  try {
+    // EPUB2: <meta name="cover" content="cover-image-id" />
+    const coverId = safeQuerySelector(opfDoc, 'metadata meta[name="cover"]')?.getAttribute('content');
+    if (coverId && manifest.get(coverId)?.href) {
+      return await loadCoverFromManifest(zip, opfDir, manifest.get(coverId));
+    }
+
+    // EPUB3: <item properties="cover-image" ... />
+    for (const item of manifest.values()) {
+      const props = String(item?.properties || '');
+      if (props.split(/\s+/).includes('cover-image')) {
+        const cover = await loadCoverFromManifest(zip, opfDir, item);
+        if (cover) return cover;
+      }
+    }
+
+    // fallback: filename/path contains "cover" and is image/*
+    for (const item of manifest.values()) {
+      const href = String(item?.href || '');
+      const mt = String(item?.mediaType || '').toLowerCase();
+      if (mt.startsWith('image/') && /cover/i.test(href)) {
+        const cover = await loadCoverFromManifest(zip, opfDir, item);
+        if (cover) return cover;
+      }
+    }
+  } catch {}
+  return null;
+}
+
+async function loadCoverFromManifest(zip, opfDir, item) {
+  const href = item?.href;
+  if (!href) return null;
+  const fullPath = normalizePath(opfDir + stripFragment(href));
+  const buf = await zip.file(fullPath)?.async('arraybuffer');
+  if (!buf) return null;
+
+  const filename = stripFragment(href).split('/').pop() || 'cover';
+  const contentType = (item?.mediaType || guessImageTypeFromHref(filename) || 'image/jpeg').toLowerCase();
+  return {
+    blob: new Blob([buf], { type: contentType }),
+    contentType,
+    filename,
+  };
+}
+
+function guessImageTypeFromHref(href) {
+  const name = String(href || '').toLowerCase();
+  if (name.endsWith('.png')) return 'image/png';
+  if (name.endsWith('.webp')) return 'image/webp';
+  if (name.endsWith('.gif')) return 'image/gif';
+  if (name.endsWith('.jpg') || name.endsWith('.jpeg')) return 'image/jpeg';
+  return null;
 }
 
 function normalizePath(p) {

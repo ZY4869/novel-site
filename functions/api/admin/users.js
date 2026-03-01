@@ -9,7 +9,9 @@ export async function onRequestGet(context) {
   if (!requireSuperAdmin(auth)) return Response.json({ error: '仅超级管理员可管理用户' }, { status: 403 });
 
   const { results } = await env.DB.prepare(
-    "SELECT id, username, role, password_locked, github_id, github_login, avatar_url, created_at, updated_at FROM admin_users ORDER BY id"
+    `SELECT u.id, u.username, u.role, u.password_locked, u.github_id, u.github_login, u.avatar_url, u.created_at, u.updated_at,
+      (SELECT COUNT(*) FROM books WHERE created_by = u.id) as book_count
+    FROM admin_users u ORDER BY u.id`
   ).all();
   return Response.json({ admins: results });
 }
@@ -28,7 +30,9 @@ export async function onRequestPost(context) {
   if (!username || !password) return Response.json({ error: '用户名和密码不能为空' }, { status: 400 });
   if (username.length < 2 || username.length > 32) return Response.json({ error: '用户名长度2-32位' }, { status: 400 });
   if (!/^[a-zA-Z0-9_]+$/.test(username)) return Response.json({ error: '用户名只能包含字母数字下划线' }, { status: 400 });
+  if (/^gh_/i.test(username)) return Response.json({ error: '用户名不能以 gh_ 开头（保留给 GitHub 登录用户）' }, { status: 400 });
   if (password.length < 8) return Response.json({ error: '密码至少8位' }, { status: 400 });
+  if (password.length > 128) return Response.json({ error: '密码最长128位' }, { status: 400 });
   if (!/[a-zA-Z]/.test(password) || !/\d/.test(password)) return Response.json({ error: '密码需包含字母和数字' }, { status: 400 });
 
   const validRoles = ['super_admin', 'admin', 'demo'];
@@ -69,10 +73,16 @@ export async function onRequestDelete(context) {
     if (count <= 1) return Response.json({ error: '不能删除最后一个超级管理员' }, { status: 400 });
   }
 
-  await env.DB.prepare('DELETE FROM admin_sessions WHERE user_id = ?').bind(body.id).run();
-  // 将该用户创建的书籍转为无主（防ID复用导致权限混乱）
-  await env.DB.prepare('UPDATE books SET created_by = NULL WHERE created_by = ?').bind(body.id).run();
-  await env.DB.prepare('DELETE FROM admin_users WHERE id = ?').bind(body.id).run();
+  // 将该用户创建的书籍转移给第一个超管，然后原子删除
+  const superAdmin = await env.DB.prepare(
+    "SELECT id FROM admin_users WHERE role = 'super_admin' AND id != ? ORDER BY id ASC LIMIT 1"
+  ).bind(body.id).first();
+  const newOwner = superAdmin ? superAdmin.id : auth.userId;
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM admin_sessions WHERE user_id = ?').bind(body.id),
+    env.DB.prepare('UPDATE books SET created_by = ? WHERE created_by = ?').bind(newOwner, body.id),
+    env.DB.prepare('DELETE FROM admin_users WHERE id = ?').bind(body.id),
+  ]);
 
   return Response.json({ success: true, message: `管理员 ${user.username} 已删除` });
 }
@@ -122,6 +132,11 @@ export async function onRequestPut(context) {
 
   await env.DB.prepare(`UPDATE admin_users SET ${sets.join(', ')} WHERE id = ?`)
     .bind(...binds).run();
+
+  // 角色变更时清除目标用户所有 session，强制重新登录
+  if (hasRole) {
+    await env.DB.prepare('DELETE FROM admin_sessions WHERE user_id = ?').bind(body.id).run().catch(() => {});
+  }
 
   return Response.json({ success: true });
 }

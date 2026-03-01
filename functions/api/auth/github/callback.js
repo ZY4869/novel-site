@@ -1,5 +1,5 @@
 // GET /api/auth/github/callback — GitHub OAuth 回调
-import { hmacVerify, sha256Hash, createSession } from '../../_utils.js';
+import { hmacVerify, sha256Hash, createSession, getGitHubClientSecret, makeAuthCookie } from '../../_utils.js';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -8,11 +8,13 @@ export async function onRequestGet(context) {
   const state = url.searchParams.get('state');
   const error = url.searchParams.get('error');
 
-  // GitHub 返回错误（用户拒绝授权等）
+  // GitHub 返回错误（用户拒绝授权等）— 白名单过滤防钓鱼
   if (error) {
+    const KNOWN_ERRORS = ['access_denied', 'redirect_uri_mismatch', 'application_suspended', 'incorrect_client_credentials'];
+    const safeError = KNOWN_ERRORS.includes(error) ? error : 'unknown_error';
     return new Response(null, {
       status: 302,
-      headers: { 'Location': '/admin.html#github_error=' + encodeURIComponent(error) }
+      headers: { 'Location': '/admin.html#github_error=' + safeError }
     });
   }
 
@@ -46,23 +48,26 @@ export async function onRequestGet(context) {
     return new Response('State expired', { status: 403 });
   }
 
-  // 从 DB 读取 client_secret 用于验证 HMAC
-  const clientSecretRow = await env.DB.prepare("SELECT value FROM site_settings WHERE key = 'github_client_secret'").first();
-  if (!clientSecretRow?.value) {
+  // 读取 client_secret（优先环境变量，fallback到DB）
+  const clientSecret = await getGitHubClientSecret(env);
+  if (!clientSecret) {
     return new Response(null, {
       status: 302,
       headers: { 'Location': '/admin.html#github_error=oauth_not_configured' }
     });
   }
 
-  // HMAC 验证用独立密钥（ADMIN_PASSWORD），不复用 client_secret
-  const hmacKey = env.ADMIN_PASSWORD || clientSecretRow.value;
+  // HMAC 验证用 ADMIN_PASSWORD（不 fallback 到 client_secret）
+  if (!env.ADMIN_PASSWORD) {
+    return new Response('Server misconfigured: ADMIN_PASSWORD not set', { status: 500 });
+  }
+  const hmacKey = env.ADMIN_PASSWORD;
   const valid = await hmacVerify(stateValue, signature, hmacKey);
   if (!valid) {
     return new Response('State signature invalid', { status: 403 });
   }
 
-  // 2. 从 DB 读取 GitHub OAuth 配置（client_secret 已在上面读取）
+  // 2. 从 DB 读取 GitHub OAuth 配置
   const clientIdRow = await env.DB.prepare("SELECT value FROM site_settings WHERE key = 'github_client_id'").first();
   if (!clientIdRow?.value) {
     return new Response(null, {
@@ -80,7 +85,7 @@ export async function onRequestGet(context) {
     },
     body: JSON.stringify({
       client_id: clientIdRow.value,
-      client_secret: clientSecretRow.value,
+      client_secret: clientSecret,
       code,
     }),
   });
@@ -112,6 +117,18 @@ export async function onRequestGet(context) {
   const ghUser = await userRes.json();
   // access_token 到此为止，不存储
 
+  // 验证 GitHub 返回数据的基本完整性
+  if (!ghUser.id || ghUser.id < 1 || !ghUser.login) {
+    return new Response(null, {
+      status: 302,
+      headers: { 'Location': '/admin.html#github_error=invalid_user_data' }
+    });
+  }
+
+  // avatar_url 只允许 GitHub 官方头像域名，否则置空
+  const safeAvatarUrl = (ghUser.avatar_url && /^https:\/\/avatars\.githubusercontent\.com\//.test(ghUser.avatar_url))
+    ? ghUser.avatar_url : '';
+
   // 4. 防滥用：检查 GitHub 账号年龄（至少 7 天）
   const accountAge = Date.now() - new Date(ghUser.created_at).getTime();
   if (accountAge < 7 * 24 * 60 * 60 * 1000) {
@@ -127,14 +144,16 @@ export async function onRequestGet(context) {
   ).bind(ghUser.id).first();
 
   if (!user) {
-    // 防滥用：限制 demo 用户总数
+    // 防滥用：限制 demo 用户总数（从设置读取，默认100）
+    const demoLimitRow = await env.DB.prepare("SELECT value FROM site_settings WHERE key = 'demo_user_limit'").first();
+    const demoLimit = demoLimitRow ? Number(demoLimitRow.value) : 100;
     const { count } = await env.DB.prepare(
       "SELECT COUNT(*) as count FROM admin_users WHERE role = 'demo' AND github_id IS NOT NULL"
     ).first();
-    if (count >= 100) {
+    if (count >= demoLimit) {
       return new Response(null, {
         status: 302,
-        headers: { 'Location': '/admin.html#github_error=' + encodeURIComponent('Demo 注册名额已满') }
+        headers: { 'Location': '/admin.html#github_error=' + encodeURIComponent('Demo 注册名额已满（上限 ' + demoLimit + '）') }
       });
     }
 
@@ -146,7 +165,7 @@ export async function onRequestGet(context) {
 
     await env.DB.prepare(
       "INSERT INTO admin_users (username, password_hash, role, github_id, github_login, avatar_url) VALUES (?, 'github_oauth:no_password', 'demo', ?, ?, ?)"
-    ).bind(finalUsername, ghUser.id, ghUser.login, ghUser.avatar_url || '').run();
+    ).bind(finalUsername, ghUser.id, ghUser.login, safeAvatarUrl).run();
 
     user = await env.DB.prepare(
       'SELECT id, username, role FROM admin_users WHERE github_id = ?'
@@ -155,19 +174,21 @@ export async function onRequestGet(context) {
     // 已有用户：更新 GitHub 信息（用户名/头像可能变了）
     await env.DB.prepare(
       "UPDATE admin_users SET github_login = ?, avatar_url = ?, updated_at = datetime('now') WHERE id = ?"
-    ).bind(ghUser.login, ghUser.avatar_url || '', user.id).run();
+    ).bind(ghUser.login, safeAvatarUrl, user.id).run();
   }
 
   // 6. 创建 session token（复用现有机制）
   const session = await createSession(env, user.id);
 
-  // 7. 重定向回前端，token 通过 URL hash 传递（hash 不会发送到服务器）
+  // 7. 重定向回前端，token 通过 HttpOnly Cookie 传递
   const clearCookie = '__Host-github_oauth_state=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0';
   return new Response(null, {
     status: 302,
-    headers: {
-      'Location': `/admin.html#github_token=${session.token}`,
-      'Set-Cookie': clearCookie,
-    }
+    headers: [
+      ['Location', '/admin.html#github_login=success'],
+      ['Set-Cookie', clearCookie],
+      ['Set-Cookie', makeAuthCookie(session.token)],
+      ['Referrer-Policy', 'no-referrer'],
+    ]
   });
 }

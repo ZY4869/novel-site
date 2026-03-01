@@ -1,19 +1,23 @@
 import { getToken } from './state.js';
 
 export function api(method, url, body) {
+  const token = getToken();
   const opts = {
     method,
+    credentials: 'same-origin',
     headers: {
-      Authorization: `Bearer ${getToken()}`,
       'Content-Type': 'application/json',
     },
   };
+  if (token) opts.headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) opts.body = JSON.stringify(body);
   return fetch(url, opts);
 }
 
 export function authHeaders(extra = {}) {
-  return Object.assign({ Authorization: `Bearer ${getToken()}` }, extra);
+  const token = getToken();
+  const base = token ? { Authorization: `Bearer ${token}` } : {};
+  return Object.assign(base, extra);
 }
 
 export function headerSafeValue(v) {
@@ -24,15 +28,29 @@ export function headerSafeValue(v) {
   return s;
 }
 
-export async function uploadBookSource(bookId, file) {
+export async function uploadBookSource(bookId, file, sourceMeta) {
   if (!file) throw new Error('未选择源文件');
+
+  const headers = authHeaders({
+    'X-File-Name': headerSafeValue(file.name || 'file'),
+    'X-File-Size': String(file.size || 0),
+    'Content-Type': file.type || 'application/octet-stream',
+  });
+
+  if (sourceMeta) {
+    const chapterCount = Number(sourceMeta.chapterCount);
+    const wordCount = Number(sourceMeta.wordCount);
+    if (Number.isFinite(chapterCount) && Number.isInteger(chapterCount) && chapterCount >= 0) {
+      headers['X-Source-Chapter-Count'] = String(chapterCount);
+    }
+    if (Number.isFinite(wordCount) && Number.isInteger(wordCount) && wordCount >= 0) {
+      headers['X-Source-Word-Count'] = String(wordCount);
+    }
+  }
+
   const res = await fetch(`/api/admin/books/${bookId}/source`, {
     method: 'PUT',
-    headers: authHeaders({
-      'X-File-Name': headerSafeValue(file.name || 'file'),
-      'X-File-Size': String(file.size || 0),
-      'Content-Type': file.type || 'application/octet-stream',
-    }),
+    headers,
     body: file,
   });
   let data = {};
@@ -92,4 +110,3 @@ export async function concurrentUpload(tasks, concurrency = 3) {
   await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, worker));
   return results;
 }
-

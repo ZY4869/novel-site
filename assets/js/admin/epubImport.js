@@ -3,9 +3,12 @@ import { refreshAllBooks } from './books.js';
 import { auth } from './state.js';
 import { showMsg } from './ui.js';
 import { parseEpubArrayBuffer } from '../shared/epub.js';
+import { uploadCoverIfEmpty } from './sourceMeta.js';
 
 let epubImportFile = null;
 let epubChapters = [];
+let epubCoverBlob = null;
+let epubTotalWords = 0;
 
 export function initEpubImport() {
   document.getElementById('epub-file')?.addEventListener('change', onEpubFileChange);
@@ -58,8 +61,10 @@ async function onEpubFileChange() {
 
   try {
     const arrayBuffer = await file.arrayBuffer();
-    const { meta, chapters } = await parseEpubArrayBuffer(arrayBuffer, file.name, JSZip);
+    const { meta, chapters, cover } = await parseEpubArrayBuffer(arrayBuffer, file.name, JSZip);
     epubChapters = chapters;
+    epubCoverBlob = cover?.blob || null;
+    epubTotalWords = (chapters || []).reduce((s, c) => s + String(c.content || '').length, 0);
 
     setValue('epub-book-title', meta.title);
     setValue('epub-book-author', meta.author);
@@ -148,8 +153,16 @@ async function startEpubImport() {
   if (status) status.textContent = '上传源文件...';
 
   if (!epubImportFile) return showMsg('epub-msg', '请先选择 EPUB 文件', 'error');
+  let coverErr = null;
   try {
-    await uploadBookSource(bookId, epubImportFile);
+    await uploadBookSource(bookId, epubImportFile, { chapterCount: epubChapters.length, wordCount: epubTotalWords });
+    if (epubCoverBlob) {
+      try {
+        await uploadCoverIfEmpty(bookId, epubCoverBlob);
+      } catch (e) {
+        coverErr = e;
+      }
+    }
   } catch (e) {
     return showMsg('epub-msg', `源文件上传失败：${e.message}`, 'error');
   }
@@ -175,8 +188,14 @@ async function startEpubImport() {
 
   await concurrentUpload(tasks, 3);
 
-  if (errors.length > 0) showMsg('epub-msg', `导入完成，${errors.length} 章失败：${errors.slice(0, 3).join('；')}`, 'error');
-  else showMsg('epub-msg', `成功导入 ${chapters.length} 章`, 'success');
+  const coverNote = coverErr ? `；封面提取失败：${coverErr.message || '未知错误'}` : '';
+  if (errors.length > 0) {
+    showMsg('epub-msg', `导入完成，${errors.length} 章失败：${errors.slice(0, 3).join('；')}${coverNote}`, 'error');
+  } else if (coverErr) {
+    showMsg('epub-msg', `导入完成${coverNote}`, 'error');
+  } else {
+    showMsg('epub-msg', `成功导入 ${chapters.length} 章`, 'success');
+  }
 
   resetEpub(false);
   refreshAllBooks();
@@ -185,6 +204,8 @@ async function startEpubImport() {
 function resetEpub(clearMsg) {
   epubImportFile = null;
   epubChapters = [];
+  epubCoverBlob = null;
+  epubTotalWords = 0;
   setDisplay('epub-preview', 'none');
   setDisplay('epub-parsing-msg', 'none');
   setDisplay('epub-progress', 'none');

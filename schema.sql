@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS books (
   source_type TEXT DEFAULT NULL,
   source_size INTEGER DEFAULT NULL,
   source_uploaded_at TEXT DEFAULT NULL,
+  source_chapter_count INTEGER DEFAULT NULL,
+  source_word_count INTEGER DEFAULT NULL,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );

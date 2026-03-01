@@ -14,6 +14,9 @@ export function initGitHubAuth({ onToken } = {}) {
       history.replaceState(null, '', location.pathname);
       if (typeof onToken === 'function') onToken();
     }
+  } else if (hash === '#github_login=success') {
+    history.replaceState(null, '', location.pathname);
+    if (typeof onToken === 'function') onToken();
   } else if (hash.startsWith('#github_error=')) {
     const error = decodeURIComponent(hash.slice('#github_error='.length));
     history.replaceState(null, '', location.pathname);
@@ -91,4 +94,3 @@ export async function saveGitHubConfig() {
     showMsg('gh-config-msg', e.message, 'error');
   }
 }
-

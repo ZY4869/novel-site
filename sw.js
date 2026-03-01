@@ -1,5 +1,5 @@
 // Service Worker for 我的书架 PWA
-const CACHE_NAME = 'novel-site-v10';
+const CACHE_NAME = 'novel-site-v11';
 
 // 预缓存优先使用 pretty URL（Cloudflare Pages 默认会将 *.html 308 到无扩展名）
 const APP_SHELL = [
@@ -19,6 +19,7 @@ const APP_SHELL = [
   '/assets/css/components/messages.css',
   '/assets/css/components/search.css',
   '/assets/css/components/tags.css',
+  '/assets/css/components/annotations.css',
   '/assets/css/pages/read.css',
   '/assets/css/pages/read-base.css',
   '/assets/css/pages/read-modes.css',
@@ -58,6 +59,13 @@ const APP_SHELL = [
   '/assets/js/read/bookmarks.js',
   '/assets/js/read/stats.js',
   '/assets/js/read/immersive.js',
+  '/assets/js/read/user.js',
+  '/assets/js/read/annotations/api.js',
+  '/assets/js/read/annotations/text.js',
+  '/assets/js/read/annotations/underlines.js',
+  '/assets/js/read/annotations/popover.js',
+  '/assets/js/read/annotations/editor.js',
+  '/assets/js/read/annotations/index.js',
   '/assets/js/pages/comics.js',
   '/assets/js/pages/comic-read.js',
   '/assets/js/pages/404.js',

@@ -1,5 +1,5 @@
 import { esc, qs } from '../../shared/dom.js';
-import { formatBytes, formatTimeAgo } from '../../shared/format.js';
+import { formatBytes, formatTimeAgo, formatWords } from '../../shared/format.js';
 import { state } from './state.js';
 import { filterChapters } from './chapters.js';
 import { exportBook } from './export.js';
@@ -114,12 +114,22 @@ function buildChaptersHtml(book, chapters, hasSource) {
 function buildSourceActionsHtml(book, chapterCount) {
   const mode = getSourceReadMode(book);
   const canRead = chapterCount === 0 && !!mode;
+
+  const ch = Number.isInteger(book?.source_chapter_count) && book.source_chapter_count >= 0 ? book.source_chapter_count : null;
+  const w = Number.isInteger(book?.source_word_count) && book.source_word_count >= 0 ? book.source_word_count : null;
+  const sourceStats = (ch !== null || w !== null) && chapterCount === 0
+    ? `<div style="font-size:13px;color:var(--text-light)">源文件：${ch ?? '—'}章 / ${w !== null ? formatWords(w) : '—字'}</div>`
+    : '';
+
   return `
-    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-      ${canRead ? `<a class="btn btn-sm" href="/read?book=${book.id}">在线阅读（源文件）</a>` : ''}
-      <a class="btn btn-sm" href="/api/books/${book.id}/source" target="_blank" rel="noopener">
-        下载源文件${book.source_name ? '：' + esc(book.source_name) : ''}${book.source_size ? '（' + formatBytes(book.source_size) + '）' : ''}
-      </a>
+    <div style="margin-top:12px">
+      ${sourceStats}
+      <div style="margin-top:${sourceStats ? '8px' : '0'};display:flex;gap:8px;flex-wrap:wrap">
+        ${canRead ? `<a class="btn btn-sm" href="/read?book=${book.id}">在线阅读（源文件）</a>` : ''}
+        <a class="btn btn-sm" href="/api/books/${book.id}/source" target="_blank" rel="noopener">
+          下载源文件${book.source_name ? '：' + esc(book.source_name) : ''}${book.source_size ? '（' + formatBytes(book.source_size) + '）' : ''}
+        </a>
+      </div>
     </div>
   `;
 }

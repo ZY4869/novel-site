@@ -154,8 +154,13 @@ async function startImport() {
   if (bar) bar.style.width = '0%';
   if (status) status.textContent = '上传源文件...';
 
+  const sourceMeta = {
+    chapterCount: parsedChapters.length,
+    wordCount: parsedChapters.reduce((s, c) => s + String(c.content || '').length, 0),
+  };
+
   try {
-    await uploadBookSource(bookId, txtImportFile);
+    await uploadBookSource(bookId, txtImportFile, sourceMeta);
   } catch (e) {
     let note = '';
     if (isNewBook) {

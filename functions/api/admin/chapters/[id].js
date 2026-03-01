@@ -31,7 +31,16 @@ export async function onRequestPut(context) {
   const body = await parseJsonBody(request);
   if (!body) return Response.json({ error: 'Invalid JSON' }, { status: 400 });
 
-  const { title, content } = body;
+  const { title, content, version } = body;
+
+  // 乐观锁：编辑内容时必须携带version字段
+  const currentVersion = chapter.version || 0;
+  if (content && version === undefined) {
+    return Response.json({ error: '请提供 version 字段以防止并发冲突' }, { status: 400 });
+  }
+  if (version !== undefined && Number(version) !== currentVersion) {
+    return Response.json({ error: '内容已被其他人修改，请刷新后重试' }, { status: 409 });
+  }
 
   if (title && typeof title === 'string' && title.trim().length > 0) {
     if (title.length > 200) return Response.json({ error: 'Title too long' }, { status: 400 });
@@ -44,19 +53,40 @@ export async function onRequestPut(context) {
       return Response.json({ error: `Content too long (max ${MAX_CONTENT_LENGTH} chars)` }, { status: 400 });
     }
     const wordCount = content.trim().length;
+    // 先写R2 → 成功后更新D1 version
+    const newVersion = (chapter.version || 0) + 1;
     try {
       await env.R2.put(chapter.content_key, content.trim());
-      await env.DB.prepare("UPDATE chapters SET word_count = ?, updated_at = datetime('now') WHERE id = ?")
-        .bind(wordCount, params.id).run();
-    } catch {
+    } catch (err) {
       return Response.json({ error: 'Failed to update content' }, { status: 500 });
+    }
+    try {
+      await env.DB.prepare(
+        "UPDATE chapters SET word_count = ?, version = ?, updated_at = datetime('now') WHERE id = ?"
+      ).bind(wordCount, newVersion, params.id).run();
+    } catch (err) {
+      // DB失败，R2已写入新内容但version未更新，下次编辑会覆盖，无需回滚R2
+      return Response.json({ error: 'Failed to update metadata' }, { status: 500 });
     }
   }
 
   await env.DB.prepare("UPDATE books SET updated_at = datetime('now') WHERE id = ?")
     .bind(chapter.book_id).run();
 
-  return Response.json({ success: true });
+  // 检查是否有批注可能失效
+  let warning = null;
+  if (content) {
+    const annoCount = await env.DB.prepare(
+      "SELECT COUNT(*) as cnt FROM annotations WHERE chapter_id = ? AND status != 'removed'"
+    ).bind(params.id).first();
+    if (annoCount && annoCount.cnt > 0) {
+      warning = `该章节有 ${annoCount.cnt} 条批注，修改内容可能导致批注定位失效`;
+    }
+  }
+
+  // 返回新version供前端下次编辑使用
+  const newChapter = await env.DB.prepare('SELECT version FROM chapters WHERE id = ?').bind(params.id).first();
+  return Response.json({ success: true, version: newChapter?.version || 0, ...(warning ? { warning } : {}) });
 }
 
 export async function onRequestDelete(context) {
@@ -74,6 +104,10 @@ export async function onRequestDelete(context) {
   }
 
   await env.DB.prepare('DELETE FROM chapter_stats WHERE chapter_id = ?').bind(params.id).run().catch(() => {});
+  await env.DB.prepare('DELETE FROM votes WHERE annotation_id IN (SELECT id FROM annotations WHERE chapter_id = ?)').bind(params.id).run().catch(() => {});
+  await env.DB.prepare('DELETE FROM reports WHERE annotation_id IN (SELECT id FROM annotations WHERE chapter_id = ?)').bind(params.id).run().catch(() => {});
+  await env.DB.prepare('DELETE FROM annotation_likes WHERE annotation_id IN (SELECT id FROM annotations WHERE chapter_id = ?)').bind(params.id).run().catch(() => {});
+  await env.DB.prepare('DELETE FROM annotations WHERE chapter_id = ?').bind(params.id).run().catch(() => {});
   await env.DB.prepare('DELETE FROM chapters WHERE id = ?').bind(params.id).run();
   await env.R2.delete(chapter.content_key).catch(() => {});
 

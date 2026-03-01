@@ -7,10 +7,18 @@ function normalizeRole(role) {
   return role === 'editor' ? 'admin' : role || 'demo';
 }
 
-function getBearerToken(request) {
+function getTokenFromRequest(request) {
+  // 优先从 HttpOnly Cookie 获取（更安全）
+  const cookieHeader = request.headers.get('Cookie') || '';
+  const cookieMatch = cookieHeader.match(/(?:^|;\s*)auth_token=([^;]+)/);
+  if (cookieMatch && cookieMatch[1] && cookieMatch[1].length >= 10) return cookieMatch[1];
+
+  // fallback: Bearer header（兼容旧前端/脚本）
   const auth = request.headers.get('Authorization');
   if (!auth || !auth.startsWith('Bearer ')) return null;
-  return auth.slice(7);
+  const token = auth.slice(7);
+  if (token && token.length >= 10) return token;
+  return null;
 }
 
 async function getSessionByTokenHash(env, tokenHash) {
@@ -60,10 +68,18 @@ async function ensureDefaultAdmin(env) {
   } catch {}
 }
 
+export function makeAuthCookie(token) {
+  return `auth_token=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=604800`;
+}
+
+export function clearAuthCookie() {
+  return 'auth_token=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0';
+}
+
 export async function checkAdmin(request, env) {
   await ensureSchema(env);
 
-  const token = getBearerToken(request);
+  const token = getTokenFromRequest(request);
   if (!token) return { ok: false, reason: 'missing' };
 
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
@@ -87,6 +103,7 @@ export async function checkAdmin(request, env) {
     username: session.username,
     role: normalizeRole(session.role),
     passwordLocked: session.password_locked === 1,
+    _token: token, // 仅供服务端内部使用（如登出删除session）
   };
 }
 
@@ -170,4 +187,3 @@ export async function createSession(env, userId) {
   await pruneSessions(env, userId);
   return { token, expiresAt };
 }
-

@@ -19,6 +19,7 @@
     <h1><a href="/">📚 我的书架</a></h1>
     <nav>
       <a href="#" id="back-link">返回目录</a>
+      <span id="nav-user"></span>
     </nav>
   </div>
   <div class="reader" id="reader-area">
@@ -111,6 +112,29 @@
   <div class="pager-tap-right" id="pager-tap-right" style="display:none"></div>
   <div class="pager-indicator" id="pager-indicator"></div>
   <div class="immersive-hint" id="immersive-hint">点击中央或按 Esc 退出沉浸模式</div>
+
+  <!-- 批注：浮动按钮（PC+移动端统一） -->
+  <div id="anno-float-btn" class="anno-float-btn">📝</div>
+
+  <!-- 批注：输入框 -->
+  <div id="anno-editor" class="anno-editor" style="display:none">
+    <div class="anno-editor-quote" id="anno-quote"></div>
+    <div class="anno-input-wrap">
+      <textarea id="anno-input" maxlength="500" placeholder="写下你的批注..."></textarea>
+      <span class="anno-char-count"><span id="anno-char-num">0</span>/500</span>
+    </div>
+    <div class="anno-editor-footer">
+      <button id="anno-vis-btn" class="anno-vis-btn" type="button">🔒 仅自己可见</button>
+      <div class="anno-editor-actions">
+        <button class="btn btn-sm" id="anno-cancel" type="button">取消</button>
+        <button class="btn btn-sm anno-submit-btn" id="anno-submit" type="button">发表</button>
+      </div>
+    </div>
+    <div class="anno-editor-hint">Ctrl+Enter 发表 · Esc 取消</div>
+  </div>
+
+  <!-- 批注：查看弹窗 -->
+  <div id="anno-popover" class="anno-popover" style="display:none"></div>
   <script type="module" src="/assets/js/pages/read.js"></script>
 </body>
 </html>

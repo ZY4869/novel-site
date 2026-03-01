@@ -60,9 +60,16 @@ export function doSearch() {
 }
 
 function buildSourceMeta(book, mode) {
-  const size = book.source_size ? ` · ${formatBytes(book.source_size)}` : '';
-  const hint = mode ? ' · 可在线读' : ' · 仅下载';
-  return `源文件${size}${hint}`;
+  const parts = [];
+  const ch = Number.isInteger(book?.source_chapter_count) && book.source_chapter_count >= 0 ? book.source_chapter_count : null;
+  const w = Number.isInteger(book?.source_word_count) && book.source_word_count >= 0 ? book.source_word_count : null;
+  if (ch !== null || w !== null) {
+    parts.push(`${ch ?? '—'}章`);
+    parts.push(w !== null ? formatWords(w) : '—字');
+  }
+  parts.push(book.source_size ? `源文件 ${formatBytes(book.source_size)}` : '源文件');
+  parts.push(mode ? '可在线读' : '仅下载');
+  return parts.join(' · ');
 }
 
 function getSourceReadMode(book) {
