@@ -12,7 +12,7 @@ export async function onRequestGet(context) {
   // 从D1读取章节元数据（不暴露content_key）
   const chapter = await env.DB.prepare(`
     SELECT c.id, c.book_id, c.title, c.sort_order, c.word_count, c.created_at, c.updated_at,
-           b.title as book_title
+           b.title as book_title, b.status as book_status
     FROM chapters c
     JOIN books b ON c.book_id = b.id
     WHERE c.id = ?
@@ -22,10 +22,18 @@ export async function onRequestGet(context) {
     return Response.json({ error: 'Chapter not found' }, { status: 404 });
   }
 
+  // 下架或待删除的书籍不可阅读
+  // 下架或待删除的书籍不可阅读
+  if (chapter.book_status && chapter.book_status !== 'normal') {
+    return Response.json({ error: '该书籍已下架' }, { status: 403 });
+  }
+  // 🟢-1: 不暴露内部字段
+  delete chapter.book_status;
+
   // 从R2读取正文内容（需要单独查content_key）
   let content = '';
   const chapterFull = await env.DB.prepare('SELECT content_key FROM chapters WHERE id = ?').bind(id).first();
-  if (chapterFull) {
+  if (chapterFull && chapterFull.content_key && chapterFull.content_key !== 'pending') {
     const r2Object = await env.R2.get(chapterFull.content_key);
     if (r2Object) content = await r2Object.text();
   }

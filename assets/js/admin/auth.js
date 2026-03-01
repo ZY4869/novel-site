@@ -22,6 +22,10 @@ export function initAuth({ onAuthed } = {}) {
     e.preventDefault();
     doLogout();
   });
+  document.getElementById('deactivate-account-link')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    deactivateAccount();
+  });
 
   document.getElementById('change-password-btn')?.addEventListener('click', doChangePassword);
   document.getElementById('change-password-cancel-btn')?.addEventListener('click', () => {
@@ -58,11 +62,9 @@ export async function doLogin() {
 }
 
 export async function checkSession() {
-  if (!auth.token) return false;
   try {
-    const res = await fetch('/api/auth?action=me', {
-      headers: { Authorization: `Bearer ${auth.token}` },
-    });
+    const headers = auth.token ? { Authorization: `Bearer ${auth.token}` } : undefined;
+    const res = await fetch('/api/auth?action=me', { headers, credentials: 'same-origin' });
     if (!res.ok) {
       clearAuth();
       return false;
@@ -89,7 +91,8 @@ export async function checkSession() {
 
 export async function doLogout() {
   try {
-    if (auth.token) await fetch('/api/auth?action=logout', { method: 'POST', headers: { Authorization: `Bearer ${auth.token}` } });
+    const headers = auth.token ? { Authorization: `Bearer ${auth.token}` } : undefined;
+    await fetch('/api/auth/logout', { method: 'POST', headers, credentials: 'same-origin' });
   } catch {}
 
   clearAuth();
@@ -112,6 +115,8 @@ function showAdminPanel(username, role) {
 
   const pwdLink = document.getElementById('change-password-link');
   if (pwdLink) pwdLink.style.display = auth.passwordLocked || role === 'demo' ? 'none' : '';
+  const deactivateLink = document.getElementById('deactivate-account-link');
+  if (deactivateLink) deactivateLink.style.display = role === 'demo' ? '' : 'none';
 
   document.querySelectorAll('.super-admin-only').forEach((el) => {
     el.style.display = role === 'super_admin' ? '' : 'none';
@@ -151,3 +156,17 @@ async function doChangePassword() {
   }
 }
 
+async function deactivateAccount() {
+  if (!confirm('确定要注销该账号吗？\n\n注销后：\n- 账号会被删除\n- 你创建的书籍会转交给超级管理员保管\n\n此操作不可撤销。')) return;
+
+  try {
+    const res = await api('DELETE', '/api/admin/account');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || '注销失败');
+
+    alert(data.message || '账号已注销');
+    await doLogout();
+  } catch (e) {
+    alert(e.message || '注销失败');
+  }
+}

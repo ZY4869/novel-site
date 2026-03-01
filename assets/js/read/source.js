@@ -6,8 +6,7 @@ import { restoreScrollPosition, saveScrollPosition } from './progress.js';
 import { updateBookmarkIcon } from './bookmarks.js';
 import { trackReadingStats } from './stats.js';
 
-const JSZIP_SRC = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
-const JSZIP_INTEGRITY = 'sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG';
+const JSZIP_SRC = '/jszip.min.js';
 
 let jsZipPromise = null;
 let sourceBook = null;
@@ -241,8 +240,6 @@ async function ensureJsZip() {
   jsZipPromise = new Promise((resolve, reject) => {
     const s = document.createElement('script');
     s.src = JSZIP_SRC;
-    s.integrity = JSZIP_INTEGRITY;
-    s.crossOrigin = 'anonymous';
     s.onload = () => (globalThis.JSZip?.loadAsync ? resolve(globalThis.JSZip) : reject(new Error('JSZip 加载失败')));
     s.onerror = () => reject(new Error('JSZip 加载失败'));
     document.head.appendChild(s);

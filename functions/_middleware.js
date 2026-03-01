@@ -65,18 +65,16 @@ export async function onRequest(context) {
 
     // 安全头
     response.headers.set('X-Frame-Options', 'DENY');
-    // CSP：默认仅允许同源脚本。管理后台 EPUB 导入、以及“源文件在线阅读(EPUB)”需要 JSZip（CDN），仅对指定页面放开该域名。
-    const allowCdnScripts =
-      url.pathname === '/admin.html' ||
-      url.pathname === '/admin' ||
-      url.pathname === '/read.html' ||
-      url.pathname === '/read';
-    const scriptSrc = allowCdnScripts
-      ? "script-src 'self' https://cdn.jsdelivr.net"
+    // CSP：默认仅允许同源脚本。批注管理页使用内联脚本，单独放开（其余页面保持更严格策略）。
+    const allowInlineScripts =
+      url.pathname === '/annotation-admin.html' ||
+      url.pathname === '/annotation-admin';
+    const scriptSrc = allowInlineScripts
+      ? "script-src 'self' 'unsafe-inline'"
       : "script-src 'self'";
     response.headers.set(
       'Content-Security-Policy',
-      `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; frame-ancestors 'none'`
+      `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://avatars.githubusercontent.com; font-src 'self'; frame-ancestors 'none'`
     );
     response.headers.set('X-Content-Type-Options', 'nosniff');
     response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');

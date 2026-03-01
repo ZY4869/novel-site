@@ -1,3 +1,5 @@
+import { ANNOTATION_SCHEMA_STATEMENTS } from './schema.annotation.js';
+
 let schemaEnsured = false;
 
 const SCHEMA_STATEMENTS = [
@@ -13,6 +15,16 @@ const SCHEMA_STATEMENTS = [
   'ALTER TABLE books ADD COLUMN source_size INTEGER DEFAULT NULL',
   'ALTER TABLE books ADD COLUMN source_uploaded_at TEXT DEFAULT NULL',
 
+  // chapters versioning + ordering
+  'ALTER TABLE chapters ADD COLUMN version INTEGER DEFAULT 0',
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_chapters_book_sort ON chapters(book_id, sort_order)',
+
+  // books status + retention (normal / unlisted / deleted / purging)
+  "ALTER TABLE books ADD COLUMN status TEXT DEFAULT 'normal'",
+  'ALTER TABLE books ADD COLUMN delete_at TEXT DEFAULT NULL',
+  // 兼容老数据：若列存在则填默认值
+  "UPDATE books SET status = 'normal' WHERE status IS NULL",
+
   // tags
   "CREATE TABLE IF NOT EXISTS tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, color TEXT DEFAULT '#888')",
   'CREATE TABLE IF NOT EXISTS book_tags (book_id INTEGER, tag_id INTEGER, PRIMARY KEY (book_id, tag_id))',
@@ -22,6 +34,8 @@ const SCHEMA_STATEMENTS = [
   'ALTER TABLE admin_users ADD COLUMN github_login TEXT DEFAULT NULL',
   'ALTER TABLE admin_users ADD COLUMN avatar_url TEXT DEFAULT NULL',
   'CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_users_github_id ON admin_users(github_id) WHERE github_id IS NOT NULL',
+
+  ...ANNOTATION_SCHEMA_STATEMENTS,
 
   // comics (CBZ)
   `
@@ -73,6 +87,11 @@ export async function ensureSchema(env) {
 
 // 公开 API / 无需登录的接口也可调用，保证新表结构存在
 export async function ensureSchemaReady(env) {
+  await ensureSchema(env);
+}
+
+// 兼容上游：批注相关 API 仍可能显式调用该函数
+export async function ensureAnnotationSchema(env) {
   await ensureSchema(env);
 }
 

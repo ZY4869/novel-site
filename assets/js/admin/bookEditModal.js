@@ -1,6 +1,5 @@
-import { api } from './api.js';
+import { api, authHeaders } from './api.js';
 import { refreshAllBooks } from './books.js';
-import { getToken } from './state.js';
 import { esc } from './ui.js';
 import { getAllTags, loadTagList } from './tags.js';
 
@@ -119,7 +118,8 @@ async function saveBookEdits() {
       formData.append('file', compressed, 'cover.jpg');
       await fetch(`/api/admin/covers?book_id=${editBookId}`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${getToken()}` },
+        headers: authHeaders(),
+        credentials: 'same-origin',
         body: formData,
       });
     }
@@ -158,4 +158,3 @@ function setValue(id, v) {
   const el = document.getElementById(id);
   if (el) el.value = String(v ?? '');
 }
-

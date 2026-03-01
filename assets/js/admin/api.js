@@ -1,19 +1,23 @@
 import { getToken } from './state.js';
 
 export function api(method, url, body) {
+  const token = getToken();
   const opts = {
     method,
+    credentials: 'same-origin',
     headers: {
-      Authorization: `Bearer ${getToken()}`,
       'Content-Type': 'application/json',
     },
   };
+  if (token) opts.headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) opts.body = JSON.stringify(body);
   return fetch(url, opts);
 }
 
 export function authHeaders(extra = {}) {
-  return Object.assign({ Authorization: `Bearer ${getToken()}` }, extra);
+  const token = getToken();
+  const base = token ? { Authorization: `Bearer ${token}` } : {};
+  return Object.assign(base, extra);
 }
 
 export function headerSafeValue(v) {
@@ -92,4 +96,3 @@ export async function concurrentUpload(tasks, concurrency = 3) {
   await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, worker));
   return results;
 }
-

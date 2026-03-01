@@ -2,7 +2,7 @@
 // POST /api/auth/logout — 登出
 // POST /api/auth/password — 修改密码
 // GET /api/auth/me — 验证当前session
-import { login, checkAdmin, changePassword, parseJsonBody, sha256Hash, hmacSign } from './_utils.js';
+import { login, checkAdmin, changePassword, parseJsonBody, sha256Hash, hmacSign, getGitHubClientSecret, makeAuthCookie, clearAuthCookie } from './_utils.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -28,23 +28,33 @@ export async function onRequestPost(context) {
       return Response.json({ error: msg }, { status });
     }
 
-    return Response.json({
+    return new Response(JSON.stringify({
       success: true,
       token: result.token,
       username: result.username,
       role: result.role,
       userId: result.userId,
       expiresAt: result.expiresAt
+    }), {
+      headers: {
+        'Content-Type': 'application/json',
+        'Set-Cookie': makeAuthCookie(result.token)
+      }
     });
   }
 
   if (action === 'logout') {
     const auth = await checkAdmin(request, env);
-    if (!auth.ok) return Response.json({ success: true });
-    const token = request.headers.get('Authorization').slice(7);
-    const tokenHash = await sha256Hash(token);
-    await env.DB.prepare('DELETE FROM admin_sessions WHERE token = ?').bind(tokenHash).run();
-    return Response.json({ success: true });
+    if (auth.ok && auth._token) {
+      const tokenHash = await sha256Hash(auth._token);
+      await env.DB.prepare('DELETE FROM admin_sessions WHERE token = ?').bind(tokenHash).run();
+    }
+    return new Response(JSON.stringify({ success: true }), {
+      headers: {
+        'Content-Type': 'application/json',
+        'Set-Cookie': clearAuthCookie()
+      }
+    });
   }
 
   if (action === 'password') {
@@ -65,6 +75,7 @@ export async function onRequestPost(context) {
     if (!result.ok) {
       const msg = result.reason === 'wrong_old' ? '旧密码错误'
         : result.reason === 'too_short' ? '新密码至少8位'
+        : result.reason === 'too_long' ? '新密码最长128位'
         : result.reason === 'too_weak' ? '新密码需包含字母和数字'
         : '修改失败';
       return Response.json({ error: msg }, { status: 400 });
@@ -101,18 +112,42 @@ export async function onRequestGet(context) {
       return Response.json({ error: 'GitHub 登录未启用' }, { status: 400 });
     }
     const clientIdRow = await env.DB.prepare("SELECT value FROM site_settings WHERE key = 'github_client_id'").first();
-    const clientSecretRow = await env.DB.prepare("SELECT value FROM site_settings WHERE key = 'github_client_secret'").first();
-    if (!clientIdRow?.value || !clientSecretRow?.value) {
+    const clientSecret = await getGitHubClientSecret(env);
+    if (!clientIdRow?.value || !clientSecret) {
       return Response.json({ error: 'GitHub OAuth 未配置' }, { status: 500 });
     }
+
+    // IP限流：每IP每分钟最多5次OAuth请求（防state存储DoS）
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+    const ipHash = await sha256Hash('oauth_rate:' + ip);
+    const rateRow = await env.DB.prepare('SELECT fail_count, last_attempt FROM auth_attempts WHERE ip_hash = ?').bind(ipHash).first();
+    if (rateRow) {
+      const elapsed = Date.now() - new Date(rateRow.last_attempt).getTime();
+      if (elapsed < 60000 && rateRow.fail_count >= 5) {
+        return Response.json({ error: '请求过于频繁，请稍后再试' }, { status: 429 });
+      }
+      if (elapsed < 60000) {
+        await env.DB.prepare("UPDATE auth_attempts SET fail_count = fail_count + 1, last_attempt = datetime('now') WHERE ip_hash = ?").bind(ipHash).run();
+      } else {
+        await env.DB.prepare("UPDATE auth_attempts SET fail_count = 1, last_attempt = datetime('now') WHERE ip_hash = ?").bind(ipHash).run();
+      }
+    } else {
+      await env.DB.prepare("INSERT INTO auth_attempts (ip_hash, fail_count, last_attempt) VALUES (?, 1, datetime('now'))").bind(ipHash).run();
+    }
+
+    // 清理过期的OAuth state（防表膨胀）
+    await env.DB.prepare("DELETE FROM site_settings WHERE key LIKE 'oauth_state:%' AND value < datetime('now')").run().catch(() => {});
 
     // 生成随机 state
     const stateBytes = new Uint8Array(32);
     crypto.getRandomValues(stateBytes);
     const state = [...stateBytes].map(b => b.toString(16).padStart(2, '0')).join('');
 
-    // HMAC 签名 state，用 ADMIN_PASSWORD 作为独立密钥（不复用 client_secret）
-    const hmacKey = env.ADMIN_PASSWORD || clientSecretRow.value;
+    // HMAC 签名 state，用 ADMIN_PASSWORD 作为独立密钥
+    if (!env.ADMIN_PASSWORD) {
+      return Response.json({ error: 'ADMIN_PASSWORD 未配置，无法启用 GitHub 登录' }, { status: 500 });
+    }
+    const hmacKey = env.ADMIN_PASSWORD;
     const signature = await hmacSign(state, hmacKey);
     const cookie = `__Host-github_oauth_state=${state}.${signature}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`;
 
