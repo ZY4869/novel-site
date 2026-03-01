@@ -27,6 +27,16 @@ const SCHEMA_STATEMENTS = [
   // 兼容老数据：若列存在则填默认值
   "UPDATE books SET status = 'normal' WHERE status IS NULL",
 
+  // chapters versioning + ordering
+  'ALTER TABLE chapters ADD COLUMN version INTEGER DEFAULT 0',
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_chapters_book_sort ON chapters(book_id, sort_order)',
+
+  // books status + retention (normal / unlisted / deleted / purging)
+  "ALTER TABLE books ADD COLUMN status TEXT DEFAULT 'normal'",
+  'ALTER TABLE books ADD COLUMN delete_at TEXT DEFAULT NULL',
+  // 兼容老数据：若列存在则填默认值
+  "UPDATE books SET status = 'normal' WHERE status IS NULL",
+
   // tags
   "CREATE TABLE IF NOT EXISTS tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, color TEXT DEFAULT '#888')",
   'CREATE TABLE IF NOT EXISTS book_tags (book_id INTEGER, tag_id INTEGER, PRIMARY KEY (book_id, tag_id))',
@@ -96,3 +106,7 @@ export async function ensureSchemaReady(env) {
 export async function ensureAnnotationSchema(env) {
   await ensureSchema(env);
 }
+<<<<<<< HEAD
+=======
+
+>>>>>>> d6e0b72c4d6b81072e69b9dec3d363fa592c6b8a

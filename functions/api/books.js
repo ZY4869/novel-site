@@ -12,7 +12,10 @@ export async function onRequestGet(context) {
   const commonSelect = `
     b.id, b.title, b.author, b.description, b.cover_key,
     b.source_name, b.source_type, b.source_size, b.source_uploaded_at,
+<<<<<<< HEAD
     b.source_chapter_count, b.source_word_count,
+=======
+>>>>>>> d6e0b72c4d6b81072e69b9dec3d363fa592c6b8a
     CASE WHEN b.source_key IS NOT NULL THEN 1 ELSE 0 END as has_source,
     b.created_at, b.updated_at,
     (SELECT COUNT(*) FROM chapters WHERE book_id = b.id) as chapter_count,
