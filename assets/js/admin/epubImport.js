@@ -10,6 +10,19 @@ let epubChapters = [];
 let epubCoverBlob = null;
 let epubTotalWords = 0;
 
+async function getMaxSortOrder(bookId) {
+  const res = await api('GET', `/api/books/${bookId}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || '获取章节列表失败');
+
+  let max = 0;
+  for (const c of data.chapters || []) {
+    const n = Number(c?.sort_order);
+    if (Number.isFinite(n) && Number.isInteger(n) && n > max) max = n;
+  }
+  return max;
+}
+
 export function initEpubImport() {
   document.getElementById('epub-file')?.addEventListener('change', onEpubFileChange);
   document.getElementById('start-epub-import-btn')?.addEventListener('click', startEpubImport);
@@ -153,6 +166,17 @@ async function startEpubImport() {
   if (status) status.textContent = '上传源文件...';
 
   if (!epubImportFile) return showMsg('epub-msg', '请先选择 EPUB 文件', 'error');
+
+  let baseSortOrder = 0;
+  if (mode !== 'new') {
+    try {
+      baseSortOrder = await getMaxSortOrder(bookId);
+    } catch (e) {
+      setDisplay('epub-progress', 'none');
+      return showMsg('epub-msg', `获取现有章节失败：${e.message || '未知错误'}`, 'error');
+    }
+  }
+
   let coverErr = null;
   try {
     await uploadBookSource(bookId, epubImportFile, { chapterCount: epubChapters.length, wordCount: epubTotalWords });
@@ -169,8 +193,13 @@ async function startEpubImport() {
 
   let done = 0;
   const errors = [];
-  const tasks = chapters.map((ch) => () =>
-    api('POST', '/api/admin/chapters', { book_id: Number(bookId), title: ch.title, content: ch.content })
+  const tasks = chapters.map((ch, i) => () =>
+    api('POST', '/api/admin/chapters', {
+      book_id: Number(bookId),
+      title: ch.title,
+      content: ch.content,
+      sort_order: baseSortOrder + i + 1,
+    })
       .then(async (res) => {
         if (!res.ok) {
           const d = await res.json();

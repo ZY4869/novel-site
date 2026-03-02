@@ -6,6 +6,19 @@ import { decodeText, splitTextBySize, splitTextChapters } from '../shared/text.j
 let txtImportFile = null;
 let parsedChapters = [];
 
+async function getMaxSortOrder(bookId) {
+  const res = await api('GET', `/api/books/${bookId}`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || '获取章节列表失败');
+
+  let max = 0;
+  for (const c of data.chapters || []) {
+    const n = Number(c?.sort_order);
+    if (Number.isFinite(n) && Number.isInteger(n) && n > max) max = n;
+  }
+  return max;
+}
+
 export function initTxtImport() {
   document.querySelectorAll('input[name=\"txt-import-mode\"]').forEach((radio) => {
     radio.addEventListener('change', toggleTxtImportMode);
@@ -159,6 +172,16 @@ async function startImport() {
     wordCount: parsedChapters.reduce((s, c) => s + String(c.content || '').length, 0),
   };
 
+  let baseSortOrder = 0;
+  if (!isNewBook) {
+    try {
+      baseSortOrder = await getMaxSortOrder(bookId);
+    } catch (e) {
+      if (progress) progress.style.display = 'none';
+      return showMsg('import-msg', `获取现有章节失败：${e.message || '未知错误'}`, 'error');
+    }
+  }
+
   try {
     await uploadBookSource(bookId, txtImportFile, sourceMeta);
   } catch (e) {
@@ -176,8 +199,13 @@ async function startImport() {
 
   let uploaded = 0;
   const errors = [];
-  const tasks = chapters.map((ch) => () =>
-    api('POST', '/api/admin/chapters', { book_id: Number(bookId), title: ch.title, content: ch.content })
+  const tasks = chapters.map((ch, i) => () =>
+    api('POST', '/api/admin/chapters', {
+      book_id: Number(bookId),
+      title: ch.title,
+      content: ch.content,
+      sort_order: baseSortOrder + i + 1,
+    })
       .then(async (res) => {
         if (!res.ok) {
           const d = await res.json();
