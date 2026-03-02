@@ -105,7 +105,7 @@ export async function doLogout() {
 
 function showAdminPanel(username, role) {
   document.getElementById('login-panel').style.display = 'none';
-  document.getElementById('admin-panel').style.display = 'block';
+  document.getElementById('admin-panel').style.display = '';
   document.getElementById('current-user').textContent = username;
 
   const badge = role === 'super_admin' ? ' (超管)' : role === 'admin' ? ' (管理)' : ' (演示)';
