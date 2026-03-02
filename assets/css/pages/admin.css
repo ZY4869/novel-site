@@ -1,12 +1,16 @@
 /* 管理后台（从 /style.css 拆分） */
 :root {
   --max-width: 100%;
+
+  --admin-card-min: 300px;
+  --admin-gap: 16px;
+  --admin-card-padding: 18px;
 }
 
 #admin-panel {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--admin-card-min)), 1fr));
+  gap: var(--admin-gap);
   align-items: start;
 }
 
@@ -14,47 +18,41 @@
   margin: 0;
 }
 
-@media (min-width: 900px) {
-  #admin-panel {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.admin-group-title {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-light);
+  letter-spacing: 0.02em;
+  user-select: none;
 }
-
-@media (min-width: 1100px) {
-  #admin-panel {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 1200px) {
-  #admin-panel {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 1400px) {
-  #admin-panel {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-  }
+.admin-group-title::after {
+  content: '';
+  height: 1px;
+  background: var(--border);
+  flex: 1;
 }
 
 .admin-section {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 24px;
-  margin-bottom: 20px;
+  padding: var(--admin-card-padding);
+  margin-bottom: var(--admin-gap);
   box-shadow: var(--shadow);
   transition: background 0.3s;
 }
 .admin-section h3 {
   font-size: 16px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border);
 }
 
-.form-group { margin-bottom: 16px; }
+.form-group { margin-bottom: 12px; }
 .form-group label {
   display: block;
   font-size: 14px;
@@ -96,3 +94,47 @@
 .admin-list .item-title { font-size: 15px; color: var(--text); }
 .admin-list .item-meta { font-size: 12px; color: var(--text-light); margin-top: 2px; }
 .admin-list .item-actions { display: flex; gap: 6px; }
+
+/* 书籍编辑弹窗（避免参与网格布局） */
+.settings-overlay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.settings-overlay.active { display: flex; }
+.settings-panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 100%;
+  max-width: 600px;
+  padding: 20px 24px 28px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+  transition: background 0.3s;
+}
+.settings-panel h3 {
+  font-size: 16px;
+  margin: 0 0 16px;
+  color: var(--text);
+  position: relative;
+}
+.settings-panel .close-btn {
+  position: absolute;
+  right: 0;
+  top: -2px;
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: var(--text-light);
+}
