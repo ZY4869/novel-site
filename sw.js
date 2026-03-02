@@ -1,5 +1,5 @@
 // Service Worker for 我的书架 PWA
-const CACHE_NAME = 'novel-site-v11';
+const CACHE_NAME = 'novel-site-v12';
 
 // 预缓存优先使用 pretty URL（Cloudflare Pages 默认会将 *.html 308 到无扩展名）
 const APP_SHELL = [
@@ -191,6 +191,11 @@ self.addEventListener('fetch', (e) => {
 
   // Admin UI: always network (no caching)
   if (url.pathname === '/admin.html' || url.pathname === '/admin') return;
+
+  // Admin static assets: always network (no caching)
+  if (url.pathname === '/assets/css/pages/admin.css') return;
+  if (url.pathname === '/assets/js/pages/admin.js') return;
+  if (url.pathname.startsWith('/assets/js/admin/')) return;
 
   // Admin API: always network (no caching)
   if (url.pathname.startsWith('/api/admin') || url.pathname.startsWith('/api/auth')) return;

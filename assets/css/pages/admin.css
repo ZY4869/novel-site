@@ -1,6 +1,6 @@
 /* 管理后台（从 /style.css 拆分） */
 :root {
-  --max-width: min(100vw, 2200px);
+  --max-width: 100%;
 }
 
 #admin-panel {
