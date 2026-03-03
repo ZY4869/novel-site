@@ -177,6 +177,13 @@ export async function githubApiJson(env, urlPath, { ref } = {}) {
       throw err;
     }
 
+    const isBadRef = res.status === 404 && /No commit found for the ref/i.test(msg);
+    if (isBadRef) {
+      const err = new Error(`GitHub 分支/标签不存在：${msg}（请检查后台配置的 Branch，常见为 main 或 master）`);
+      err.status = res.status;
+      throw err;
+    }
+
     const err = new Error(`GitHub API 请求失败：${res.status} ${msg}`);
     err.status = res.status;
     throw err;
