@@ -167,6 +167,16 @@ export async function githubApiJson(env, urlPath, { ref } = {}) {
 
   if (!res.ok) {
     const msg = String(data?.message || res.statusText || 'GitHub API error');
+    const isRateLimit = res.status === 403 && /rate limit exceeded/i.test(msg);
+    if (isRateLimit) {
+      const hint = token
+        ? '（已使用 Token 仍被限流，请稍后重试或更换 Token）'
+        : '（匿名请求限额很低，建议配置 GITHUB_REPO_TOKEN 或在后台保存 Token）';
+      const err = new Error(`GitHub API 触发限流：${msg}${hint}`);
+      err.status = res.status;
+      throw err;
+    }
+
     const err = new Error(`GitHub API 请求失败：${res.status} ${msg}`);
     err.status = res.status;
     throw err;
