@@ -1,4 +1,5 @@
 import { esc as escHtml } from '../shared/dom.js';
+export { filenameToTitle } from '../shared/title.js';
 
 export function showMsg(id, text, type) {
   const el = document.getElementById(id);
@@ -26,10 +27,4 @@ export function formatBytes(bytes) {
   return `${i === 0 ? v.toFixed(0) : v.toFixed(v >= 10 ? 1 : 2)} ${units[i]}`;
 }
 
-export function filenameToTitle(name) {
-  const s = String(name || '').trim();
-  return s.replace(/\\.[a-zA-Z0-9]{1,6}$/, '').slice(0, 200) || '未命名';
-}
-
 export const esc = escHtml;
-

@@ -20,6 +20,13 @@ export function initNovelUpload({ onDone } = {}) {
   const fileEl = document.getElementById('novel-file');
   if (!fileEl) return;
 
+  const autofillTitleFromFilename = (el, filename) => {
+    if (!el) return;
+    if (String(el.value || '').trim()) return;
+    el.value = filenameToTitle(filename);
+    el.dataset.autofill = 'filename';
+  };
+
   const state = {
     file: null,
     kind: 'other',
@@ -45,6 +52,10 @@ export function initNovelUpload({ onDone } = {}) {
     ['novel-source-title', 'novel-source-author', 'novel-source-desc', 'novel-book-title', 'novel-book-author', 'novel-book-desc'].forEach((id) =>
       setValue(id, '')
     );
+    ['novel-source-title', 'novel-book-title'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) delete el.dataset.autofill;
+    });
     resetProgress();
   };
 
@@ -54,7 +65,7 @@ export function initNovelUpload({ onDone } = {}) {
     setDisplay('novel-book-meta', target === 'new' ? '' : 'none');
     if (target === 'new' && state.file) {
       const titleEl = document.getElementById('novel-book-title');
-      if (titleEl && !titleEl.value.trim()) titleEl.value = filenameToTitle(state.file.name);
+      autofillTitleFromFilename(titleEl, state.file.name);
     }
   };
 
@@ -64,7 +75,14 @@ export function initNovelUpload({ onDone } = {}) {
     const title = document.getElementById('novel-book-title');
     const author = document.getElementById('novel-book-author');
     const desc = document.getElementById('novel-book-desc');
-    if (title && !title.value.trim() && m.title) title.value = String(m.title).slice(0, 200);
+    const metaTitle = String(m.title || '').trim();
+    if (title && metaTitle) {
+      const cur = String(title.value || '').trim();
+      if (!cur || title.dataset.autofill === 'filename') {
+        title.value = metaTitle.slice(0, 200);
+        title.dataset.autofill = 'meta';
+      }
+    }
     if (author && !author.value.trim() && m.author) author.value = String(m.author).slice(0, 100);
     if (desc && !desc.value.trim() && m.description) desc.value = String(m.description).slice(0, 2000);
   };
@@ -125,7 +143,7 @@ export function initNovelUpload({ onDone } = {}) {
     setDisplay('novel-source-box', state.file ? '' : 'none');
     if (state.file) {
       const titleEl = document.getElementById('novel-source-title');
-      if (titleEl && !titleEl.value.trim()) titleEl.value = filenameToTitle(state.file.name);
+      autofillTitleFromFilename(titleEl, state.file.name);
       setText(
         'novel-source-tip',
         state.kind === 'other'
@@ -174,9 +192,9 @@ export function initNovelUpload({ onDone } = {}) {
     }
 
     const sourceTitleEl = document.getElementById('novel-source-title');
-    if (sourceTitleEl && !sourceTitleEl.value.trim()) sourceTitleEl.value = filenameToTitle(file.name);
+    autofillTitleFromFilename(sourceTitleEl, file.name);
     const bookTitleEl = document.getElementById('novel-book-title');
-    if (bookTitleEl && !bookTitleEl.value.trim()) bookTitleEl.value = filenameToTitle(file.name);
+    autofillTitleFromFilename(bookTitleEl, file.name);
 
     await applyUploadMode();
   };
@@ -184,6 +202,13 @@ export function initNovelUpload({ onDone } = {}) {
   fileEl.addEventListener('change', onFileChange);
   document.querySelectorAll('input[name="novel-upload-mode"]').forEach((r) => r.addEventListener('change', applyUploadMode));
   document.querySelectorAll('input[name="novel-import-target"]').forEach((r) => r.addEventListener('change', applyTargetMode));
+
+  ['novel-book-title', 'novel-source-title'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('input', (e) => {
+      const el = e?.target;
+      if (el?.dataset) delete el.dataset.autofill;
+    });
+  });
 
   document.getElementById('novel-start-btn')?.addEventListener('click', () =>
     startImportAction({ state, ensureParsed, onDone })

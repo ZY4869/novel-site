@@ -40,9 +40,25 @@ export async function syncImportGitHubNovel({ path, name, target }, { onStatus, 
     parsed = await parseEpubFile(file, globalThis.JSZip);
   }
 
-  // 若创建新书且未填标题，则默认取文件名
-  if (target?.type === 'new' && !String(target.title || '').trim()) {
-    target.title = filenameToTitle(name);
+  if (target?.type === 'new') {
+    // 若未填标题，则默认取文件名
+    if (!String(target.title || '').trim()) {
+      target.title = filenameToTitle(name);
+      if (!target.titleSource) target.titleSource = 'filename';
+    }
+
+    // EPUB 元数据优先：仅在标题为空或仍为“文件名自动填充”时覆盖
+    if (kind === 'epub' && parsed?.meta) {
+      const metaTitle = String(parsed.meta.title || '').trim();
+      if (metaTitle && (!String(target.title || '').trim() || String(target.titleSource || '') === 'filename')) {
+        target.title = metaTitle.slice(0, 200);
+        target.titleSource = 'meta';
+      }
+      const metaAuthor = String(parsed.meta.author || '').trim();
+      if (metaAuthor && !String(target.author || '').trim()) target.author = metaAuthor.slice(0, 100);
+      const metaDesc = String(parsed.meta.description || '').trim();
+      if (metaDesc && !String(target.description || '').trim()) target.description = metaDesc.slice(0, 2000);
+    }
   }
 
   if (typeof onStatus === 'function') onStatus('同步导入中...');
@@ -55,4 +71,3 @@ export async function syncImportGitHubNovel({ path, name, target }, { onStatus, 
     onProgress,
   });
 }
-

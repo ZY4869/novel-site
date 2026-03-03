@@ -11,10 +11,17 @@ function getNovelTargetFromUi(defaultTitle) {
   const targetType = document.querySelector('input[name="novel-import-target"]:checked')?.value || 'existing';
   if (targetType === 'new') {
     const titleEl = document.getElementById('novel-book-title');
-    if (titleEl && !titleEl.value.trim() && defaultTitle) titleEl.value = defaultTitle;
+    if (titleEl && defaultTitle) {
+      const cur = String(titleEl.value || '').trim();
+      if (!cur || titleEl.dataset.autofill) {
+        titleEl.value = defaultTitle;
+        titleEl.dataset.autofill = 'filename';
+      }
+    }
     return {
       type: 'new',
-      title: document.getElementById('novel-book-title')?.value?.trim() || '',
+      title: titleEl?.value?.trim() || '',
+      titleSource: titleEl?.dataset?.autofill || '',
       author: document.getElementById('novel-book-author')?.value?.trim() || '',
       description: document.getElementById('novel-book-desc')?.value?.trim() || '',
     };
