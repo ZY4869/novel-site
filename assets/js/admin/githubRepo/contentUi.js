@@ -1,6 +1,7 @@
 import { filenameToTitle, showMsg } from '../ui.js';
-import { bindGitHubComicDir, bindGitHubNovel, listGitHubComicPages, scanGitHubRepo } from './api.js';
+import { bindGitHubComicDir, bindGitHubNovel, fetchGitHubRawBlob, listGitHubComicPages, scanGitHubRepo } from './api.js';
 import { renderComicList, renderNovelList } from './render.js';
+import { computeSourceMetaFromArrayBuffer, saveSourceMeta } from '../sourceMeta.js';
 import { isBusy, setBusy } from './state.js';
 import { syncImportGitHubCbz } from './syncComicCbz.js';
 import { syncImportGitHubNovel } from './syncNovel.js';
@@ -37,7 +38,12 @@ export function initGitHubRepoContentUi({ onNovelDone, onComicDone } = {}) {
       try {
         setBusy(true);
         showMsg('gh-repo-novels-msg', '绑定中...', '');
-        await bindGitHubNovel({ path, title });
+        const data = await bindGitHubNovel({ path, title });
+        const bookId = data?.book?.id;
+        if (bookId) {
+          showMsg('gh-repo-novels-msg', '已绑定，正在统计章数/字数...', '');
+          await tryComputeAndSaveSourceMeta({ bookId, path, name });
+        }
         showMsg('gh-repo-novels-msg', `已绑定：${title}`, 'success');
         if (typeof onNovelDone === 'function') onNovelDone();
       } catch (err) {
@@ -160,3 +166,20 @@ async function scanComics() {
   }
 }
 
+async function tryComputeAndSaveSourceMeta({ bookId, path, name }) {
+  try {
+    const blob = await fetchGitHubRawBlob(path);
+    if (!blob || !blob.size) return;
+    if (blob.size > 50 * 1024 * 1024) {
+      showMsg('gh-repo-novels-msg', '文件超过 50MB，已跳过章数/字数统计（仍可直连阅读）', '');
+      return;
+    }
+
+    const ab = await blob.arrayBuffer();
+    const meta = await computeSourceMetaFromArrayBuffer(ab, { name: name || 'book', type: blob.type || '' }, globalThis.JSZip);
+    if (!meta) return;
+    await saveSourceMeta(bookId, meta);
+  } catch {
+    // 非关键：绑定成功即可；统计失败可后续用“修复源信息”补齐
+  }
+}
