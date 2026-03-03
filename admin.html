@@ -57,6 +57,8 @@
         <a href="?tab=comic" data-tab="comic">漫画</a>
       </div>
 
+      <div class="admin-subtabs" id="admin-subtabs" style="display:none"></div>
+
       <!-- 看板 -->
       <div class="admin-section" id="stats-panel" data-admin-tab="dashboard">
         <h3>📊 看板</h3>
@@ -133,7 +135,7 @@
       </div>
 
       <!-- 存储空间 -->
-      <div class="admin-section" id="storage-panel" data-admin-tab="dashboard">
+      <div class="admin-section" id="storage-panel" data-admin-tab="novel" data-admin-subtab="storage" data-admin-subtab-label="存储空间" data-admin-subtab-order="90">
         <h3>🧮 存储空间</h3>
         <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end">
           <div>
@@ -183,7 +185,7 @@
       </div>
 
       <!-- 账号管理 -->
-      <div class="admin-section" data-admin-tab="dashboard">
+      <div class="admin-section" data-admin-tab="novel" data-admin-subtab="account" data-admin-subtab-label="账号管理" data-admin-subtab-order="100">
         <h3>👤 账号管理</h3>
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
           <span>当前用户：<strong id="current-user"></strong></span>
@@ -243,7 +245,7 @@
       </div>
 
       <!-- 站点设置 -->
-      <div class="admin-section super-admin-only" style="display:none" data-admin-tab="dashboard">
+      <div class="admin-section super-admin-only" style="display:none" data-admin-tab="novel" data-admin-subtab="site_settings" data-admin-subtab-label="站点设置" data-admin-subtab-order="110">
         <h3>⚙️ 站点设置</h3>
         <div class="form-group">
           <label>站点名称</label>
@@ -320,7 +322,7 @@
       </div>
 
       <!-- 小说文件上传（自动识别） -->
-      <div class="admin-section" data-admin-tab="novel">
+      <div class="admin-section" data-admin-tab="novel" data-admin-subtab="novel_upload" data-admin-subtab-label="小说文件上传" data-admin-subtab-order="30">
         <h3>📤 小说文件上传（自动识别）</h3>
         <div class="form-group">
           <label>选择文件（TXT/EPUB 可导入生成章节，最大 50MB；任意格式可作为源文件收纳，最大 200MB）</label>
@@ -428,7 +430,7 @@
       </div>
 
       <!-- GitHub 小说（直连/同步） -->
-      <div class="admin-section super-admin-only" style="display:none" data-admin-tab="novel">
+      <div class="admin-section super-admin-only" style="display:none" data-admin-tab="novel" data-admin-subtab="novel_github" data-admin-subtab-label="GitHub 小说" data-admin-subtab-order="40">
         <h3>🐙 GitHub 小说（直连 / 同步）</h3>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
           <button class="btn btn-sm" id="gh-repo-scan-novels-btn">扫描 GitHub 小说目录</button>
@@ -448,7 +450,7 @@
       </div>
 
       <!-- 漫画管理 -->
-      <div class="admin-section" data-admin-tab="comic">
+      <div class="admin-section" data-admin-tab="comic" data-admin-subtab="comic_manage" data-admin-subtab-label="漫画（CBZ）" data-admin-subtab-order="10">
         <h3>🖼️ 漫画（CBZ）</h3>
         <div class="form-group">
           <label>选择 CBZ 文件（最大 200MB，仅图片压缩包）</label>
@@ -489,7 +491,7 @@
       </div>
 
       <!-- GitHub 漫画（直连/同步） -->
-      <div class="admin-section super-admin-only" style="display:none" data-admin-tab="comic">
+      <div class="admin-section super-admin-only" style="display:none" data-admin-tab="comic" data-admin-subtab="comic_github" data-admin-subtab-label="GitHub 漫画" data-admin-subtab-order="20">
         <h3>🐙 GitHub 漫画（直连 / 同步）</h3>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
           <button class="btn btn-sm" id="gh-repo-scan-comics-btn">扫描 GitHub 漫画目录</button>
@@ -500,7 +502,7 @@
       </div>
 
       <!-- 创建书籍 -->
-      <div class="admin-section" data-admin-tab="novel">
+      <div class="admin-section" data-admin-tab="novel" data-admin-subtab="book_create" data-admin-subtab-label="创建新书" data-admin-subtab-order="20">
         <h3>📖 创建新书</h3>
         <div class="form-group">
           <label>书名 *</label>
@@ -519,49 +521,10 @@
       </div>
 
       <!-- 书籍管理 -->
-      <div class="admin-section" data-admin-tab="novel">
+      <div class="admin-section" data-admin-tab="novel" data-admin-subtab="book_manage" data-admin-subtab-label="书籍管理" data-admin-subtab-order="10">
         <h3>📚 书籍管理</h3>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
-          <button class="btn btn-sm" id="open-books-manage-btn" type="button">打开书籍管理页</button>
-        </div>
         <div id="book-list-msg"></div>
         <ul class="admin-list" id="book-list"><li class="loading">加载中...</li></ul>
-      </div>
-
-      <!-- 书籍管理页（直连转同步） -->
-      <div class="settings-overlay" id="books-manage-overlay">
-        <div class="settings-panel" style="max-width:860px;border-radius:var(--radius)">
-          <h3>书籍管理<button class="close-btn" id="close-books-manage">✕</button></h3>
-
-          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:10px">
-            <div style="flex:1;min-width:220px">
-              <label style="font-size:12px;color:var(--text-light)">搜索</label>
-              <input type="text" id="books-manage-search" placeholder="按书名/作者搜索" maxlength="100">
-            </div>
-            <label style="display:flex;gap:6px;align-items:center;font-size:13px;color:var(--text-light)">
-              <input type="checkbox" id="books-manage-only-gh"> 仅直连（GitHub）
-            </label>
-            <label style="display:flex;gap:6px;align-items:center;font-size:13px;color:var(--text-light)">
-              <input type="checkbox" id="books-manage-only-can-sync"> 仅可同步导入
-            </label>
-          </div>
-
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
-            <label style="display:flex;gap:6px;align-items:center;font-size:13px;color:var(--text-light)">
-              <input type="checkbox" id="books-manage-select-all"> 全选
-            </label>
-            <button class="btn btn-sm" id="books-manage-batch-sync-btn" disabled>批量同步导入</button>
-            <button class="btn btn-sm" id="books-manage-batch-cancel-btn" style="display:none">停止</button>
-            <span id="books-manage-selected-hint" style="font-size:12px;color:var(--text-light)"></span>
-          </div>
-          <div id="books-manage-msg"></div>
-
-          <ul class="admin-list" id="books-manage-list"><li style="padding:12px 0;color:var(--text-light)">加载中...</li></ul>
-
-          <div style="font-size:12px;color:var(--text-light);margin-top:8px">
-            说明：仅对“直连绑定（GitHub）且未生成章节的 TXT/EPUB（≤50MB）”提供同步导入。
-          </div>
-        </div>
       </div>
 
       <!-- 书籍编辑弹窗 -->
@@ -602,7 +565,7 @@
       </div>
 
       <!-- 标签管理 -->
-      <div class="admin-section" data-admin-tab="novel">
+      <div class="admin-section" data-admin-tab="novel" data-admin-subtab="tags" data-admin-subtab-label="标签管理" data-admin-subtab-order="70">
         <h3>🏷️ 标签管理</h3>
         <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:end">
           <div>
@@ -620,14 +583,14 @@
       </div>
 
       <!-- 批注管理 -->
-      <div class="admin-section" data-admin-tab="novel">
+      <div class="admin-section" data-admin-tab="novel" data-admin-subtab="annotations" data-admin-subtab-label="批注管理" data-admin-subtab-order="80">
         <h3>💬 批注管理</h3>
         <p style="color:var(--text-light);font-size:14px;margin-bottom:12px">查看/处理批注、举报与社区治理相关操作。</p>
         <a class="btn" href="/annotation-admin.html" target="_blank" rel="noopener">打开批注管理后台</a>
       </div>
 
       <!-- 添加章节 -->
-      <div class="admin-section" data-admin-tab="novel">
+      <div class="admin-section" data-admin-tab="novel" data-admin-subtab="chapter_create" data-admin-subtab-label="添加章节" data-admin-subtab-order="50">
         <h3>📝 添加章节</h3>
         <div class="form-group">
           <label>选择书籍 *</label>
@@ -647,7 +610,7 @@
       </div>
 
       <!-- 章节管理 -->
-      <div class="admin-section" data-admin-tab="novel">
+      <div class="admin-section" data-admin-tab="novel" data-admin-subtab="chapter_manage" data-admin-subtab-label="章节管理" data-admin-subtab-order="60">
         <h3>📄 章节管理</h3>
         <div class="form-group">
           <label>选择书籍</label>
@@ -664,7 +627,7 @@
       </div>
 
       <!-- 自定义字体管理 -->
-      <div class="admin-section super-admin-only" style="display:none" data-admin-tab="dashboard">
+      <div class="admin-section super-admin-only" style="display:none" data-admin-tab="novel" data-admin-subtab="fonts" data-admin-subtab-label="自定义字体" data-admin-subtab-order="120">
         <h3>🔤 自定义字体</h3>
         <div class="form-group">
           <label>上传 .woff2 字体文件（最大10MB）</label>
@@ -678,7 +641,7 @@
       </div>
 
       <!-- 数据备份与恢复 -->
-      <div class="admin-section super-admin-only" style="display:none" data-admin-tab="dashboard">
+      <div class="admin-section super-admin-only" style="display:none" data-admin-tab="novel" data-admin-subtab="backup" data-admin-subtab-label="数据备份与恢复" data-admin-subtab-order="130">
         <h3>💾 数据备份与恢复</h3>
         <p style="font-size:13px;color:var(--text-light);margin-bottom:12px">导出全站数据（书籍+章节正文+设置）为 JSON 文件，或从备份文件恢复。</p>
         <button class="btn" id="backup-btn">导出备份</button>
@@ -696,7 +659,7 @@
       </div>
 
       <!-- 管理员管理（仅超管可见） -->
-      <div class="admin-section super-admin-only" style="display:none" data-admin-tab="dashboard">
+      <div class="admin-section super-admin-only" style="display:none" data-admin-tab="novel" data-admin-subtab="admins" data-admin-subtab-label="管理员管理" data-admin-subtab-order="140">
         <h3>👥 管理员管理</h3>
         <div id="admin-users-list" style="margin-bottom:12px"></div>
         <details style="margin-top:8px">

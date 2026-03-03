@@ -124,6 +124,10 @@ function showAdminPanel(username, role) {
   document.querySelectorAll('.hide-for-demo').forEach((el) => {
     el.style.display = role === 'demo' ? 'none' : '';
   });
+
+  try {
+    window.dispatchEvent(new CustomEvent('admin:role-changed', { detail: { role } }));
+  } catch {}
 }
 
 function showChangePassword() {
