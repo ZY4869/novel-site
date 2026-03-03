@@ -51,9 +51,13 @@
 
     <!-- 管理面板（登录后显示） -->
     <div id="admin-panel" style="display:none">
+      <div class="admin-tabs" id="admin-tabs">
+        <a href="?tab=novel" data-tab="novel">小说</a>
+        <a href="?tab=comic" data-tab="comic">漫画</a>
+      </div>
 
       <!-- 数据概览 -->
-      <div class="admin-section" id="stats-panel">
+      <div class="admin-section" id="stats-panel" data-admin-tab="common">
         <h3>📊 数据概览</h3>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px" id="stats-grid">
           <div style="text-align:center;padding:16px;background:var(--bg);border-radius:var(--radius)">
@@ -86,7 +90,7 @@
       </div>
 
       <!-- 存储空间 -->
-      <div class="admin-section" id="storage-panel">
+      <div class="admin-section" id="storage-panel" data-admin-tab="common">
         <h3>🧮 存储空间</h3>
         <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end">
           <div>
@@ -136,7 +140,7 @@
       </div>
 
       <!-- 账号管理 -->
-      <div class="admin-section">
+      <div class="admin-section" data-admin-tab="common">
         <h3>👤 账号管理</h3>
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
           <span>当前用户：<strong id="current-user"></strong></span>
@@ -161,10 +165,42 @@
           <button class="btn btn-sm" id="change-password-cancel-btn" style="margin-left:8px">取消</button>
           <div id="pwd-msg" style="margin-top:8px"></div>
         </div>
+
+        <details class="super-admin-only" style="display:none;margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
+          <summary style="cursor:pointer;font-size:14px;color:var(--accent);user-select:none">🐙 Demo 注册（GitHub 登录）</summary>
+          <div style="margin-top:12px">
+            <div class="form-group">
+              <label>
+                <input type="checkbox" id="gh-oauth-enabled"> 启用 GitHub 登录注册
+              </label>
+              <div style="font-size:12px;color:var(--text-light);margin-top:2px">开启后，登录页会显示"GitHub 登录"按钮，新用户自动注册为演示管理员</div>
+            </div>
+            <div id="gh-oauth-config" style="display:none">
+              <div style="background:var(--bg);padding:10px;border-radius:var(--radius);margin-bottom:12px;font-size:13px;color:var(--text-light)">
+                <strong>配置步骤：</strong><br>
+                1. 打开 <a href="https://github.com/settings/developers" target="_blank" style="color:var(--primary)">GitHub Developer Settings</a><br>
+                2. 点击 OAuth Apps → New OAuth App<br>
+                3. Homepage URL 填：<code id="gh-homepage-url"></code><br>
+                4. Callback URL 填：<code id="gh-callback-url"></code><br>
+                5. 创建后把 Client ID 和 Client Secret 填到下面
+              </div>
+              <div class="form-group">
+                <label>Client ID</label>
+                <input type="text" id="gh-client-id" placeholder="Ov23li..." maxlength="100">
+              </div>
+              <div class="form-group">
+                <label>Client Secret <span id="gh-secret-status" style="font-size:12px"></span></label>
+                <input type="password" id="gh-client-secret" placeholder="留空则保持原值不变" maxlength="200">
+              </div>
+              <button class="btn" id="save-github-config-btn">保存 GitHub 配置</button>
+              <div id="gh-config-msg" style="margin-top:8px"></div>
+            </div>
+          </div>
+        </details>
       </div>
 
       <!-- 站点设置 -->
-      <div class="admin-section super-admin-only" style="display:none">
+      <div class="admin-section super-admin-only" style="display:none" data-admin-tab="common">
         <h3>⚙️ 站点设置</h3>
         <div class="form-group">
           <label>站点名称</label>
@@ -181,188 +217,181 @@
         <button class="btn" id="save-settings-btn">保存设置</button>
         <div id="settings-msg"></div>
 
-        <!-- GitHub OAuth 配置 -->
+        <!-- GitHub 仓库内容（小说/漫画） -->
         <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border)">
-          <h4 style="margin:0 0 12px">🐙 Demo 注册（GitHub 登录）</h4>
+          <h4 style="margin:0 0 12px">🐙 GitHub 仓库内容（小说/漫画）</h4>
           <div class="form-group">
             <label>
-              <input type="checkbox" id="gh-oauth-enabled"> 启用 GitHub 登录注册
+              <input type="checkbox" id="gh-repo-enabled"> 启用 GitHub 仓库内容
             </label>
-            <div style="font-size:12px;color:var(--text-light);margin-top:2px">开启后，登录页会显示"GitHub 登录"按钮，新用户自动注册为演示管理员</div>
+            <div style="font-size:12px;color:var(--text-light);margin-top:2px">启用后，可将仓库内的小说/漫画以“直连 / 同步”方式接入站点。</div>
           </div>
-          <div id="gh-oauth-config" style="display:none">
-            <div style="background:var(--bg);padding:10px;border-radius:var(--radius);margin-bottom:12px;font-size:13px;color:var(--text-light)">
-              <strong>配置步骤：</strong><br>
-              1. 打开 <a href="https://github.com/settings/developers" target="_blank" style="color:var(--primary)">GitHub Developer Settings</a><br>
-              2. 点击 OAuth Apps → New OAuth App<br>
-              3. Homepage URL 填：<code id="gh-homepage-url"></code><br>
-              4. Callback URL 填：<code id="gh-callback-url"></code><br>
-              5. 创建后把 Client ID 和 Client Secret 填到下面
+
+          <div id="gh-repo-config-box">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end">
+              <div style="flex:1;min-width:160px">
+                <label style="font-size:12px;color:var(--text-light)">Owner</label>
+                <input type="text" id="gh-repo-owner" placeholder="例如 xingzihai" maxlength="100">
+              </div>
+              <div style="flex:1;min-width:160px">
+                <label style="font-size:12px;color:var(--text-light)">Repo</label>
+                <input type="text" id="gh-repo-name" placeholder="例如 novel-content" maxlength="100">
+              </div>
+              <div style="flex:1;min-width:140px">
+                <label style="font-size:12px;color:var(--text-light)">Branch</label>
+                <input type="text" id="gh-repo-branch" placeholder="main" maxlength="100">
+              </div>
             </div>
-            <div class="form-group">
-              <label>Client ID</label>
-              <input type="text" id="gh-client-id" placeholder="Ov23li..." maxlength="100">
+
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:end;margin-top:10px">
+              <div style="flex:1;min-width:200px">
+                <label style="font-size:12px;color:var(--text-light)">小说目录</label>
+                <input type="text" id="gh-repo-novels-path" placeholder="novels/" maxlength="200">
+              </div>
+              <div style="flex:1;min-width:200px">
+                <label style="font-size:12px;color:var(--text-light)">漫画目录</label>
+                <input type="text" id="gh-repo-comics-path" placeholder="comics/" maxlength="200">
+              </div>
             </div>
-            <div class="form-group">
-              <label>Client Secret <span id="gh-secret-status" style="font-size:12px"></span></label>
-              <input type="password" id="gh-client-secret" placeholder="留空则保持原值不变" maxlength="200">
+
+            <div class="form-group" style="margin-top:10px">
+              <label>访问 Token（私有仓库可选） <span id="gh-repo-token-status" style="font-size:12px"></span></label>
+              <input type="password" id="gh-repo-token" placeholder="留空则保持原值不变" maxlength="300">
+              <div style="font-size:12px;color:var(--text-light);margin-top:4px">建议优先使用环境变量 <code>GITHUB_REPO_TOKEN</code>；在此保存将写入站点设置表。</div>
+              <button class="btn btn-sm btn-danger" id="gh-repo-clear-token-btn" style="margin-top:8px;display:none">清除已保存 Token</button>
             </div>
-            <button class="btn" id="save-github-config-btn">保存 GitHub 配置</button>
-            <div id="gh-config-msg" style="margin-top:8px"></div>
+
+            <button class="btn" id="save-gh-repo-config-btn">保存 GitHub 仓库配置</button>
+            <div id="gh-repo-config-msg" style="margin-top:8px"></div>
           </div>
         </div>
       </div>
 
-      <!-- TXT导入 -->
-      <div class="admin-section">
-        <h3>📥 TXT 导入</h3>
+      <!-- 小说文件上传（自动识别） -->
+      <div class="admin-section" data-admin-tab="novel">
+        <h3>📤 小说文件上传（自动识别）</h3>
         <div class="form-group">
-          <label>导入方式</label>
+          <label>选择文件（TXT/EPUB 可导入生成章节，最大 50MB；任意格式可作为源文件收纳，最大 200MB）</label>
+          <input type="file" id="novel-file">
+          <div id="novel-file-info" style="font-size:12px;color:var(--text-light);margin-top:6px"></div>
+        </div>
+
+        <div class="form-group" id="novel-mode-group" style="display:none">
+          <label>处理方式</label>
           <div class="admin-option-row">
             <label>
-              <input type="radio" name="txt-import-mode" value="existing" checked> 导入到已有书籍
+              <input type="radio" name="novel-upload-mode" value="import" checked> 导入生成章节
             </label>
             <label>
-              <input type="radio" name="txt-import-mode" value="new"> 创建新书并导入
+              <input type="radio" name="novel-upload-mode" value="source"> 仅收纳源文件
             </label>
           </div>
-          <div style="font-size:12px;color:var(--text-light);margin-top:6px">导入会保留源 TXT 文件（不拆解），后续可下载。</div>
+          <div id="novel-mode-tip" style="font-size:12px;color:var(--text-light);margin-top:6px"></div>
         </div>
-        <div id="txt-existing-book" class="form-group">
-          <label>选择目标书籍 *</label>
-          <select id="import-book"><option value="">加载中...</option></select>
-        </div>
-        <div id="txt-new-book" style="display:none">
-          <div style="padding:12px;background:var(--bg);border-radius:var(--radius);margin-bottom:12px">
-            <div class="form-group" style="margin-bottom:8px">
-              <label>书名</label>
-              <input type="text" id="txt-book-title" placeholder="书名" maxlength="200">
-            </div>
-            <div class="form-group" style="margin-bottom:8px">
-              <label>作者</label>
-              <input type="text" id="txt-book-author" placeholder="作者" maxlength="100">
-            </div>
-            <div class="form-group" style="margin-bottom:0">
-              <label>简介</label>
-              <textarea id="txt-book-desc" placeholder="简介" style="min-height:60px" maxlength="2000"></textarea>
-            </div>
-          </div>
-        </div>
-        <div class="form-group">
-          <label>选择 TXT 文件（支持 UTF-8 / GBK 编码，最大 50MB）</label>
-          <input type="file" id="import-file" accept=".txt,.text" style="padding:8px 0">
-        </div>
-        <div id="import-preview" style="display:none">
-          <div class="form-group">
-            <label>章节分割预览（可取消勾选不需要的章节）</label>
-            <div id="import-chapters" class="admin-list" style="max-height:300px;overflow-y:auto"></div>
-            <div style="font-size:13px;color:var(--text-light);margin-top:6px">
-              共 <span id="import-total">0</span> 章，<span id="import-words">0</span> 字
-            </div>
-          </div>
-          <div class="import-progress" style="display:none">
-            <div style="background:var(--bg-secondary);border-radius:10px;overflow:hidden;height:20px;margin:12px 0">
-              <div id="import-bar" style="height:100%;background:var(--primary);border-radius:10px;transition:width 0.3s;width:0%"></div>
-            </div>
-            <div id="import-status" style="font-size:13px;color:var(--text-light)"></div>
-          </div>
-          <button class="btn" id="start-import-btn">开始导入</button>
-          <button class="btn btn-sm" id="cancel-import-btn" style="margin-left:8px">取消</button>
-        </div>
-        <div id="import-msg"></div>
-      </div>
 
-      <!-- EPUB导入 -->
-      <div class="admin-section">
-        <h3>📖 EPUB 导入</h3>
-        <div class="form-group">
-          <label>选择 EPUB 文件（最大 50MB）</label>
-          <input type="file" id="epub-file" accept=".epub" style="padding:8px 0">
-        </div>
-        <div id="epub-parsing-msg" style="display:none;padding:12px;background:var(--bg);border-radius:var(--radius);color:var(--text-light);font-size:14px">
-          ⏳ 正在解析 EPUB 文件...
-        </div>
-        <div id="epub-preview" style="display:none">
-          <div style="padding:12px;background:var(--bg);border-radius:var(--radius);margin-bottom:12px">
-            <div class="form-group" style="margin-bottom:8px">
-              <label>书名</label>
-              <input type="text" id="epub-book-title" placeholder="书名" maxlength="200">
-            </div>
-            <div class="form-group" style="margin-bottom:8px">
-              <label>作者</label>
-              <input type="text" id="epub-book-author" placeholder="作者" maxlength="100">
-            </div>
-            <div class="form-group" style="margin-bottom:0">
-              <label>简介</label>
-              <textarea id="epub-book-desc" placeholder="简介" style="min-height:60px" maxlength="2000"></textarea>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>章节列表（可取消勾选不需要的章节，可编辑标题）</label>
-            <div id="epub-chapters" class="admin-list" style="max-height:400px;overflow-y:auto"></div>
-            <div style="font-size:13px;color:var(--text-light);margin-top:6px">
-              共 <span id="epub-total">0</span> 章，<span id="epub-words">0</span> 字
-            </div>
-          </div>
+        <!-- 导入生成章节 -->
+        <div id="novel-import-box" style="display:none">
           <div class="form-group">
             <label>导入方式</label>
             <div class="admin-option-row">
               <label>
-                <input type="radio" name="epub-import-mode" value="new" checked> 创建新书并导入
+                <input type="radio" name="novel-import-target" value="existing" checked> 导入到已有书籍
               </label>
               <label>
-                <input type="radio" name="epub-import-mode" value="existing"> 导入到已有书籍
+                <input type="radio" name="novel-import-target" value="new"> 创建新书并导入
               </label>
             </div>
+            <div style="font-size:12px;color:var(--text-light);margin-top:6px">导入会同时保留源文件，便于后续在线阅读/下载。</div>
           </div>
-          <div id="epub-existing-book" style="display:none" class="form-group">
-            <label>选择目标书籍</label>
-            <select id="epub-book-select"><option value="">加载中...</option></select>
+
+          <div id="novel-existing-book" class="form-group">
+            <label>选择目标书籍 *</label>
+            <select id="import-book"><option value="">加载中...</option></select>
           </div>
-          <div class="import-progress" id="epub-progress" style="display:none">
-            <div style="background:var(--bg-secondary,var(--border));border-radius:10px;overflow:hidden;height:20px;margin:12px 0">
-              <div id="epub-bar" style="height:100%;background:var(--primary,var(--accent));border-radius:10px;transition:width 0.3s;width:0%"></div>
+
+          <div id="novel-book-meta" style="display:none">
+            <div style="padding:12px;background:var(--bg);border-radius:var(--radius);margin-bottom:12px">
+              <div class="form-group" style="margin-bottom:8px">
+                <label>书名</label>
+                <input type="text" id="novel-book-title" placeholder="书名" maxlength="200">
+              </div>
+              <div class="form-group" style="margin-bottom:8px">
+                <label>作者</label>
+                <input type="text" id="novel-book-author" placeholder="作者（可选）" maxlength="100">
+              </div>
+              <div class="form-group" style="margin-bottom:0">
+                <label>简介</label>
+                <textarea id="novel-book-desc" placeholder="简介（可选）" style="min-height:60px" maxlength="2000"></textarea>
+              </div>
             </div>
-            <div id="epub-status" style="font-size:13px;color:var(--text-light)"></div>
           </div>
-          <div style="display:flex;gap:8px">
-            <button class="btn" id="start-epub-import-btn">开始导入</button>
-            <button class="btn btn-sm" id="cancel-epub-import-btn">取消</button>
+
+          <div id="novel-import-preview" style="display:none">
+            <div class="form-group">
+              <label>章节预览（可取消勾选不需要的章节）</label>
+              <div id="novel-chapters" class="admin-list" style="max-height:300px;overflow-y:auto"></div>
+              <div style="font-size:13px;color:var(--text-light);margin-top:6px">
+                共 <span id="novel-total">0</span> 章，<span id="novel-words">0</span> 字
+              </div>
+            </div>
           </div>
+
+          <div class="import-progress" id="novel-progress" style="display:none">
+            <div style="background:var(--bg-secondary,var(--border));border-radius:10px;overflow:hidden;height:20px;margin:12px 0">
+              <div id="novel-bar" style="height:100%;background:var(--primary,var(--accent));border-radius:10px;transition:width 0.3s;width:0%"></div>
+            </div>
+            <div id="novel-status" style="font-size:13px;color:var(--text-light)"></div>
+          </div>
+
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" id="novel-start-btn">开始处理</button>
+            <button class="btn btn-sm" id="novel-cancel-btn">取消</button>
+          </div>
+          <div id="novel-msg"></div>
         </div>
-        <div id="epub-msg"></div>
+
+        <!-- 仅收纳源文件 -->
+        <div id="novel-source-box" style="display:none">
+          <div style="font-size:12px;color:var(--text-light);margin:-4px 0 8px" id="novel-source-tip"></div>
+          <div style="padding:12px;background:var(--bg);border-radius:var(--radius);margin-bottom:12px">
+            <div class="form-group" style="margin-bottom:8px">
+              <label>书名 *</label>
+              <input type="text" id="novel-source-title" placeholder="默认取文件名" maxlength="200">
+            </div>
+            <div class="form-group" style="margin-bottom:8px">
+              <label>作者</label>
+              <input type="text" id="novel-source-author" placeholder="可选" maxlength="100">
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label>简介</label>
+              <textarea id="novel-source-desc" placeholder="可选" style="min-height:60px" maxlength="2000"></textarea>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn" id="novel-source-create-btn">创建并上传源文件</button>
+            <button class="btn btn-sm" id="novel-source-cancel-btn">取消</button>
+          </div>
+          <div id="novel-source-msg"></div>
+        </div>
       </div>
 
-      <!-- 源文件收纳（任意格式） -->
-      <div class="admin-section">
-        <h3>📦 源文件收纳（任意格式）</h3>
-        <div class="form-group">
-          <label>选择文件（最大 200MB，将保留源格式）</label>
-          <input type="file" id="source-file" style="padding:8px 0">
-          <div style="font-size:12px;color:var(--text-light);margin-top:6px">提示：此方式不会生成章节；TXT/EPUB 可直接在线阅读（不导入也能读），如需生成章节目录请使用上面的 TXT/EPUB 导入。</div>
+      <!-- GitHub 小说（直连/同步） -->
+      <div class="admin-section super-admin-only" style="display:none" data-admin-tab="novel">
+        <h3>🐙 GitHub 小说（直连 / 同步）</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+          <button class="btn btn-sm" id="gh-repo-scan-novels-btn">扫描 GitHub 小说目录</button>
+          <span id="gh-repo-novels-msg" style="font-size:12px;color:var(--text-light)"></span>
         </div>
-        <div class="form-group">
-          <label>书名 *</label>
-          <input type="text" id="source-book-title" placeholder="默认取文件名" maxlength="200">
-        </div>
-        <div class="form-group">
-          <label>作者</label>
-          <input type="text" id="source-book-author" placeholder="可选" maxlength="100">
-        </div>
-        <div class="form-group">
-          <label>简介</label>
-          <textarea id="source-book-desc" placeholder="可选" style="min-height:60px" maxlength="2000"></textarea>
-        </div>
-        <button class="btn" id="create-book-from-source-btn">创建并上传源文件</button>
-        <div id="source-book-msg"></div>
+        <ul class="admin-list" id="gh-repo-novels-list"><li style="color:var(--text-light)">请先扫描</li></ul>
+        <div style="font-size:12px;color:var(--text-light);margin-top:8px">直连：不落地到 R2；同步：导入到本地 D1+R2（生成章节 + 保留源文件）。</div>
       </div>
 
       <!-- 漫画管理 -->
-      <div class="admin-section">
+      <div class="admin-section" data-admin-tab="comic">
         <h3>🖼️ 漫画（CBZ）</h3>
         <div class="form-group">
           <label>选择 CBZ 文件（最大 200MB，仅图片压缩包）</label>
-          <input type="file" id="cbz-file" accept=".cbz,.zip" style="padding:8px 0">
+          <input type="file" id="cbz-file" accept=".cbz,.zip">
         </div>
         <div id="cbz-parsing-msg" style="display:none;padding:12px;background:var(--bg);border-radius:var(--radius);color:var(--text-light);font-size:14px">
           ⏳ 正在解析 CBZ 文件...
@@ -398,8 +427,19 @@
         </div>
       </div>
 
+      <!-- GitHub 漫画（直连/同步） -->
+      <div class="admin-section super-admin-only" style="display:none" data-admin-tab="comic">
+        <h3>🐙 GitHub 漫画（直连 / 同步）</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+          <button class="btn btn-sm" id="gh-repo-scan-comics-btn">扫描 GitHub 漫画目录</button>
+          <span id="gh-repo-comics-msg" style="font-size:12px;color:var(--text-light)"></span>
+        </div>
+        <ul class="admin-list" id="gh-repo-comics-list"><li style="color:var(--text-light)">请先扫描</li></ul>
+        <div style="font-size:12px;color:var(--text-light);margin-top:8px">图片目录支持直连阅读；CBZ 建议使用同步导入（解包为页面）。</div>
+      </div>
+
       <!-- 创建书籍 -->
-      <div class="admin-section">
+      <div class="admin-section" data-admin-tab="novel">
         <h3>📖 创建新书</h3>
         <div class="form-group">
           <label>书名 *</label>
@@ -418,7 +458,7 @@
       </div>
 
       <!-- 书籍管理 -->
-      <div class="admin-section">
+      <div class="admin-section" data-admin-tab="novel">
         <h3>📚 书籍管理</h3>
         <ul class="admin-list" id="book-list"><li class="loading">加载中...</li></ul>
       </div>
@@ -461,7 +501,7 @@
       </div>
 
       <!-- 标签管理 -->
-      <div class="admin-section">
+      <div class="admin-section" data-admin-tab="novel">
         <h3>🏷️ 标签管理</h3>
         <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:end">
           <div>
@@ -479,14 +519,14 @@
       </div>
 
       <!-- 批注管理 -->
-      <div class="admin-section">
+      <div class="admin-section" data-admin-tab="novel">
         <h3>💬 批注管理</h3>
         <p style="color:var(--text-light);font-size:14px;margin-bottom:12px">查看/处理批注、举报与社区治理相关操作。</p>
         <a class="btn" href="/annotation-admin.html" target="_blank" rel="noopener">打开批注管理后台</a>
       </div>
 
       <!-- 添加章节 -->
-      <div class="admin-section">
+      <div class="admin-section" data-admin-tab="novel">
         <h3>📝 添加章节</h3>
         <div class="form-group">
           <label>选择书籍 *</label>
@@ -506,7 +546,7 @@
       </div>
 
       <!-- 章节管理 -->
-      <div class="admin-section">
+      <div class="admin-section" data-admin-tab="novel">
         <h3>📄 章节管理</h3>
         <div class="form-group">
           <label>选择书籍</label>
@@ -523,12 +563,12 @@
       </div>
 
       <!-- 自定义字体管理 -->
-      <div class="admin-section super-admin-only" style="display:none">
+      <div class="admin-section super-admin-only" style="display:none" data-admin-tab="common">
         <h3>🔤 自定义字体</h3>
         <div class="form-group">
           <label>上传 .woff2 字体文件（最大10MB）</label>
           <div style="display:flex;gap:8px;align-items:center">
-            <input type="file" id="font-file" accept=".woff2" style="padding:8px 0;flex:1">
+            <input type="file" id="font-file" accept=".woff2" style="flex:1;width:auto">
             <button class="btn" id="upload-font-btn">上传</button>
           </div>
         </div>
@@ -537,7 +577,7 @@
       </div>
 
       <!-- 数据备份与恢复 -->
-      <div class="admin-section super-admin-only" style="display:none">
+      <div class="admin-section super-admin-only" style="display:none" data-admin-tab="common">
         <h3>💾 数据备份与恢复</h3>
         <p style="font-size:13px;color:var(--text-light);margin-bottom:12px">导出全站数据（书籍+章节正文+设置）为 JSON 文件，或从备份文件恢复。</p>
         <button class="btn" id="backup-btn">导出备份</button>
@@ -555,7 +595,7 @@
       </div>
 
       <!-- 管理员管理（仅超管可见） -->
-      <div class="admin-section super-admin-only" style="display:none">
+      <div class="admin-section super-admin-only" style="display:none" data-admin-tab="common">
         <h3>👥 管理员管理</h3>
         <div id="admin-users-list" style="margin-bottom:12px"></div>
         <details style="margin-top:8px">

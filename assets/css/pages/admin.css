@@ -14,6 +14,48 @@
   align-items: start;
 }
 
+#admin-panel .admin-tabs {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  box-shadow: var(--shadow);
+}
+
+#admin-panel .admin-tabs a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  text-decoration: none;
+  font-size: 14px;
+  color: var(--text);
+  border: 1px solid transparent;
+  background: transparent;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+#admin-panel .admin-tabs a:hover {
+  background: var(--bg);
+  border-color: var(--border);
+}
+
+#admin-panel .admin-tabs a.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: transparent;
+}
+
+.admin-tab-hidden {
+  display: none !important;
+}
+
 #admin-panel .admin-section {
   margin: 0;
   overflow-x: hidden;
@@ -84,6 +126,42 @@
   background: var(--bg);
   color: var(--text);
   transition: background 0.3s, color 0.3s;
+}
+
+.form-group input[type="file"] {
+  cursor: pointer;
+}
+
+.form-group input[type="file"]::file-selector-button {
+  margin-left: 6px;
+  margin-right: 10px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.form-group input[type="file"]::file-selector-button:hover {
+  background: var(--accent-dark);
+}
+
+.form-group input[type="file"]::-webkit-file-upload-button {
+  margin-left: 6px;
+  margin-right: 10px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.form-group input[type="file"]::-webkit-file-upload-button:hover {
+  background: var(--accent-dark);
 }
 .form-group textarea { min-height: 200px; resize: vertical; }
 .form-group input:focus,
