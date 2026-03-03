@@ -13,6 +13,20 @@ export async function onRequestGet(context) {
 
   if (!comic) return Response.json({ error: 'Comic not found' }, { status: 404 });
   comic.cover_url = comic.cover_key ? `/api/comics/${comic.id}/cover` : null;
-  return Response.json({ comic });
+  const res = Response.json({ comic });
+  context.waitUntil(trackComicView(env, comic.id));
+  return res;
 }
 
+async function trackComicView(env, comicId) {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    await env.DB.prepare(
+      'INSERT INTO comic_stats (comic_id, date, views) VALUES (?, ?, 1) ON CONFLICT(comic_id, date) DO UPDATE SET views = views + 1'
+    )
+      .bind(comicId, today)
+      .run();
+  } catch (e) {
+    console.error('Track comic view error:', e);
+  }
+}

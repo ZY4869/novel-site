@@ -354,6 +354,7 @@ wrangler pages dev . --port 3355 \
 wrangler d1 execute novel-db --file migrations/001_stats_and_roles.sql --remote
 wrangler d1 execute novel-db --file migrations/002_github_oauth.sql --remote
 wrangler d1 execute novel-db --file migrations/003_chapter_version.sql --remote
+wrangler d1 execute novel-db --file migrations/004_comic_stats.sql --remote
 ```
 
 新部署不需要手动执行迁移，`schema.sql` 已包含所有表结构，且后端 `ensureSchema` 会自动补齐缺失字段。

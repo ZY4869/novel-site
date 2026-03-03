@@ -24,6 +24,34 @@ export async function onRequestGet(context) {
       "SELECT COALESCE(SUM(pv), 0) as total_pv, COALESCE(SUM(uv), 0) as total_uv FROM site_visits"
     ).first();
 
+    // 小说阅读概览
+    const novelTodayRow = await env.DB.prepare(
+      'SELECT COALESCE(SUM(views), 0) as views FROM book_stats WHERE date = ?'
+    ).bind(today).first();
+    const novelLast30Row = await env.DB.prepare(
+      'SELECT COALESCE(SUM(views), 0) as views FROM book_stats WHERE date >= ?'
+    ).bind(thirtyDaysAgo).first();
+    const novelTotalRow = await env.DB.prepare(
+      'SELECT COALESCE(SUM(views), 0) as views FROM book_stats'
+    ).first();
+    const { results: novelDaily } = await env.DB.prepare(
+      'SELECT date, COALESCE(SUM(views), 0) as views FROM book_stats WHERE date >= ? GROUP BY date ORDER BY date ASC'
+    ).bind(thirtyDaysAgo).all();
+
+    // 漫画阅读概览
+    const comicTodayRow = await env.DB.prepare(
+      'SELECT COALESCE(SUM(views), 0) as views FROM comic_stats WHERE date = ?'
+    ).bind(today).first().catch(() => ({ views: 0 }));
+    const comicLast30Row = await env.DB.prepare(
+      'SELECT COALESCE(SUM(views), 0) as views FROM comic_stats WHERE date >= ?'
+    ).bind(thirtyDaysAgo).first().catch(() => ({ views: 0 }));
+    const comicTotalRow = await env.DB.prepare(
+      'SELECT COALESCE(SUM(views), 0) as views FROM comic_stats'
+    ).first().catch(() => ({ views: 0 }));
+    const { results: comicDaily } = await env.DB.prepare(
+      'SELECT date, COALESCE(SUM(views), 0) as views FROM comic_stats WHERE date >= ? GROUP BY date ORDER BY date ASC'
+    ).bind(thirtyDaysAgo).all().catch(() => ({ results: [] }));
+
     // 热门书籍（最近30天阅读量Top10）
     const { results: hotBooks } = await env.DB.prepare(`
       SELECT bs.book_id, b.title, SUM(bs.views) as total_views
@@ -45,12 +73,38 @@ export async function onRequestGet(context) {
       LIMIT 10
     `).all();
 
+    // 热门漫画（最近30天阅读量Top10）
+    const { results: hotComics } = await env.DB.prepare(`
+      SELECT cs.comic_id, c.title, SUM(cs.views) as total_views
+      FROM comic_stats cs
+      JOIN comics c ON cs.comic_id = c.id
+      WHERE cs.date >= ?
+      GROUP BY cs.comic_id
+      ORDER BY total_views DESC
+      LIMIT 10
+    `).bind(thirtyDaysAgo).all().catch(() => ({ results: [] }));
+
     return Response.json({
       today: todayStats,
       totals,
       daily: dailyStats,
       hotBooks,
-      hotChapters
+      hotChapters,
+      hotComics,
+      reading: {
+        novels: {
+          today_views: novelTodayRow?.views || 0,
+          last30_views: novelLast30Row?.views || 0,
+          total_views: novelTotalRow?.views || 0,
+          daily: novelDaily || [],
+        },
+        comics: {
+          today_views: comicTodayRow?.views || 0,
+          last30_views: comicLast30Row?.views || 0,
+          total_views: comicTotalRow?.views || 0,
+          daily: comicDaily || [],
+        },
+      },
     });
   } catch (e) {
     console.error('Stats error:', e);

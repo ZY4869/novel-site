@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'admin_active_tab_v1';
-const VALID_TABS = ['novel', 'comic'];
+const VALID_TABS = ['dashboard', 'novel', 'comic'];
 
 function parseTabAttr(value) {
   return String(value || '')
@@ -36,8 +36,7 @@ function applyTab(tab) {
 
   document.querySelectorAll('#admin-panel .admin-section').forEach((section) => {
     const attrs = parseTabAttr(section.getAttribute('data-admin-tab'));
-    const isCommon = attrs.length === 0 || attrs.includes('common') || attrs.includes('all');
-    const shouldShow = isCommon || attrs.includes(tab);
+    const shouldShow = attrs.length === 0 || attrs.includes('all') || attrs.includes(tab);
     section.classList.toggle('admin-tab-hidden', !shouldShow);
   });
 }
@@ -51,7 +50,7 @@ function resolveInitialTab() {
     if (VALID_TABS.includes(v)) return v;
   } catch {}
 
-  return 'novel';
+  return 'dashboard';
 }
 
 export function initAdminTabs() {
@@ -78,4 +77,3 @@ export function initAdminTabs() {
     applyTab(resolveInitialTab());
   });
 }
-

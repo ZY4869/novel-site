@@ -83,6 +83,17 @@ const SCHEMA_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_comics_updated_at ON comics(updated_at)',
   'CREATE INDEX IF NOT EXISTS idx_comics_created_by ON comics(created_by)',
   'CREATE INDEX IF NOT EXISTS idx_comic_pages_comic_page ON comic_pages(comic_id, page_index)',
+
+  // comic stats (daily)
+  `
+    CREATE TABLE IF NOT EXISTS comic_stats (
+      comic_id INTEGER NOT NULL,
+      date TEXT NOT NULL,
+      views INTEGER DEFAULT 0,
+      PRIMARY KEY (comic_id, date)
+    )
+  `,
+  'CREATE INDEX IF NOT EXISTS idx_comic_stats_date ON comic_stats(date)',
 ];
 
 async function runIgnore(env, sql) {

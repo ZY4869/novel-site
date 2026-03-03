@@ -69,9 +69,9 @@ export async function onRequestDelete(context) {
 
   await env.DB.batch([
     env.DB.prepare('DELETE FROM comic_pages WHERE comic_id = ?').bind(params.id),
+    env.DB.prepare('DELETE FROM comic_stats WHERE comic_id = ?').bind(params.id),
     env.DB.prepare('DELETE FROM comics WHERE id = ?').bind(params.id),
   ]).catch(() => {});
 
   return Response.json({ success: true });
 }
-
