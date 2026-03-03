@@ -3,6 +3,7 @@ import { formatBytes, formatTimeAgo, formatWords } from '../../shared/format.js'
 import { state } from './state.js';
 import { filterChapters } from './chapters.js';
 import { exportBook } from './export.js';
+import { bindSourceTocBuilder } from './sourceToc.js';
 
 export async function loadBook(bookId) {
   const el = qs('#content');
@@ -91,7 +92,20 @@ function buildChaptersHtml(book, chapters, hasSource) {
     const mode = getSourceReadMode(book);
     const readLink = mode ? `<a href="/read?book=${book.id}">在线阅读源文件</a>` : '';
     const note = mode ? `你可以先${readLink}，也可以到<a href="/admin">管理后台</a>导入生成章节。` : `该源文件格式暂不支持在线阅读，请下载源文件，或到<a href="/admin">管理后台</a>使用 TXT/EPUB 导入生成章节。`;
-    return `<div class="empty"><p>暂无章节</p><p style="color:var(--text-light);font-size:13px">${note}</p></div>`;
+
+    const tocBuilder = mode
+      ? `
+        <div style="margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+          <button class="btn btn-sm" id="build-source-toc-btn">生成目录并展示字数</button>
+        </div>
+        <div id="source-toc-msg" style="margin-top:8px"></div>
+        <div style="margin-top:14px;text-align:left">
+          <ul class="chapter-list" id="source-toc-list" style="display:none"></ul>
+        </div>
+      `
+      : '';
+
+    return `<div class="empty"><p>暂无章节</p><p style="color:var(--text-light);font-size:13px">${note}</p>${tocBuilder}</div>`;
   }
   return (
     '<ul class="chapter-list">' +
@@ -180,6 +194,8 @@ function bookmarkHref(bookId, chapterId) {
 }
 
 function bindBookEvents(book) {
+  bindSourceTocBuilder(book);
+
   const exportLink = qs('#export-link');
   if (exportLink) {
     exportLink.addEventListener('click', (e) => {
