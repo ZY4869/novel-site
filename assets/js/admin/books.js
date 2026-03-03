@@ -9,9 +9,19 @@ import { computeSourceMetaFromArrayBuffer, computeSourceMetaFromFile, saveSource
 let booksCache = [];
 let booksPromise = null;
 let syncingSourceImport = false;
+let bookSearchQuery = '';
 
 export function initBooks() {
   initBooksManagePage();
+
+  const search = document.getElementById('book-search');
+  search?.addEventListener('input', () => {
+    bookSearchQuery = String(search.value || '')
+      .trim()
+      .toLowerCase();
+    renderBookListFromCache();
+  });
+
   document.addEventListener('books:refresh', async (e) => {
     await refreshAllBooks();
     const bookId = Number(e?.detail?.bookId || 0) || null;
@@ -219,18 +229,36 @@ async function fetchBooks() {
 }
 
 function renderBookList(data) {
+  const books = data.books || [];
+  booksCache = Array.isArray(books) ? books : [];
+  renderBookListFromCache();
+}
+
+function renderBookListFromCache() {
   const el = document.getElementById('book-list');
   if (!el) return;
 
   try {
-    const books = data.books || [];
-    if (books.length === 0) {
+    const all = Array.isArray(booksCache) ? booksCache : [];
+    if (all.length === 0) {
       el.innerHTML = '<li style="padding:12px 0;color:var(--text-light)">暂无书籍</li>';
-      booksCache = [];
       return;
     }
 
-    booksCache = books;
+    const q = String(bookSearchQuery || '').trim();
+    const books = q
+      ? all.filter((b) => {
+          const t = String(b?.title || '').toLowerCase();
+          const a = String(b?.author || '').toLowerCase();
+          return t.includes(q) || a.includes(q);
+        })
+      : all;
+
+    if (books.length === 0) {
+      el.innerHTML = '<li style="padding:12px 0;color:var(--text-light)">无匹配结果</li>';
+      return;
+    }
+
     el.innerHTML = books
       .map((b) => {
         const status = String(b.status || 'normal').toLowerCase();
@@ -239,62 +267,64 @@ function renderBookList(data) {
         const isDeleted = status === 'deleted';
         const isPurging = status === 'purging';
 
-	        const isOwner = auth.role !== 'demo' || b.created_by === auth.userId;
-	        const canOperate = auth.role !== 'demo' || b.created_by === auth.userId;
-	        const hasSource = !!b.has_source;
-	        const downloadOnly = (b.chapter_count || 0) === 0 && hasSource;
-	        const sourceMode = downloadOnly ? getSourceReadMode(b) : null;
-	        const canSyncFromSource = downloadOnly && canOperate && !!b.source_is_github && canSyncImportFromSource(b);
-	        const sourceInfo = hasSource ? ` / 源文件 ${formatBytes(b.source_size || 0)}` : '';
+        const isOwner = auth.role !== 'demo' || b.created_by === auth.userId;
+        const canOperate = auth.role !== 'demo' || b.created_by === auth.userId;
+        const hasSource = !!b.has_source;
+        const downloadOnly = (b.chapter_count || 0) === 0 && hasSource;
+        const sourceMode = downloadOnly ? getSourceReadMode(b) : null;
+        const canSyncFromSource = downloadOnly && canOperate && !!b.source_is_github && canSyncImportFromSource(b);
 
-	        const sourceChapterCount = normalizeCount(b.source_chapter_count);
-	        const sourceWordCount = normalizeCount(b.source_word_count);
-	        const isUsingSourceStats = downloadOnly && (sourceChapterCount !== null || sourceWordCount !== null);
-	        const displayChapterCount = (b.chapter_count || 0) > 0 ? b.chapter_count : (sourceChapterCount ?? '—');
-	        const displayWordCount = (b.chapter_count || 0) > 0 ? b.total_words : (sourceWordCount ?? '—');
-	        const sourceStatsBadge = isUsingSourceStats
-	          ? ' <span style="font-size:11px;color:var(--text-light)">(源)</span>'
-	          : '';
+        const sourceChapterCount = normalizeCount(b.source_chapter_count);
+        const sourceWordCount = normalizeCount(b.source_word_count);
+        const isUsingSourceStats = downloadOnly && (sourceChapterCount !== null || sourceWordCount !== null);
+        const displayChapterCount = (b.chapter_count || 0) > 0 ? b.chapter_count : sourceChapterCount ?? '—';
+        const displayWordCount = (b.chapter_count || 0) > 0 ? b.total_words : sourceWordCount ?? '—';
 
-        const statusBadge = (() => {
-          if (isUnlisted) return ' <span style="font-size:11px;color:var(--text-light)">(下架)</span>';
-          if (isDeleted) return ' <span style="font-size:11px;color:#e67e22">(回收站)</span>';
-          if (isPurging) return ' <span style="font-size:11px;color:#e74c3c">(清理中)</span>';
-          return '';
-        })();
+        const chapterText =
+          typeof displayChapterCount === 'number' ? displayChapterCount.toLocaleString('zh-CN') : String(displayChapterCount);
+        const wordText = typeof displayWordCount === 'number' ? displayWordCount.toLocaleString('zh-CN') : String(displayWordCount);
+
+        const badges = [];
+        if (downloadOnly) badges.push(`<span class="badge">${sourceMode ? '源文件可读' : '仅可下载'}</span>`);
+        if (downloadOnly && b.source_is_github) badges.push('<span class="badge">直连</span>');
+        if (isUsingSourceStats) badges.push('<span class="badge">源</span>');
+        if (isUnlisted) badges.push('<span class="badge badge-warn">下架</span>');
+        if (isDeleted) badges.push('<span class="badge badge-warn">回收站</span>');
+        if (isPurging) badges.push('<span class="badge badge-danger">清理中</span>');
+        if (auth.role === 'demo' && !isOwner) badges.push('<span class="badge">他人</span>');
 
         const deleteAtText = (() => {
           if (!b.delete_at) return '';
           const d = new Date(b.delete_at);
           if (!Number.isFinite(d.getTime())) return '';
           const ds = d.toLocaleDateString('zh-CN');
-          return ` / 预计清理 ${ds}`;
+          return `预计清理 ${ds}`;
         })();
 
+        const chips = [];
+        if (b.author) chips.push(`<span class="chip chip-muted">作者：${esc(b.author)}</span>`);
+        chips.push(`<span class="chip">${esc(chapterText)} 章</span>`);
+        chips.push(`<span class="chip">${esc(wordText)} 字</span>`);
+        if (hasSource) chips.push(`<span class="chip chip-muted">源文件 ${esc(formatBytes(b.source_size || 0))}</span>`);
+        if (isDeleted && deleteAtText) chips.push(`<span class="chip chip-muted">${esc(deleteAtText)}</span>`);
+
         return `
-          <li data-id="${b.id}">
-	            <div class="item-info">
-	              <div class="item-title">${esc(b.title)}${
-	          downloadOnly
-	            ? ` <span style="font-size:11px;color:var(--text-light)">${sourceMode ? '(源文件可读)' : '(仅可下载)'}</span>${
-	              b.source_is_github ? ' <span style="font-size:11px;color:var(--text-light)">(直连)</span>' : ''
-	            }`
-	            : ''
-		        }${statusBadge}${auth.role === 'demo' && !isOwner ? ' <span style="font-size:11px;color:var(--text-light)">(他人)</span>' : ''}</div>
-	              <div class="item-meta">${b.author ? `${esc(b.author)} / ` : ''}${displayChapterCount} 章 / ${displayWordCount} 字${sourceStatsBadge}${sourceInfo}${isDeleted ? deleteAtText : ''}</div>
-	            </div>
-	            <div class="item-actions">
-	              ${sourceMode ? `<a class="btn btn-sm" href="/read?book=${b.id}" target="_blank" rel="noopener">在线读</a>` : ''}
-	              ${hasSource ? `<a class="btn btn-sm" href="/api/books/${b.id}/source" target="_blank" rel="noopener">下载</a>` : ''}
-	              ${downloadOnly && canOperate ? '<button class="btn btn-sm btn-fix-source-meta">修复源信息</button>' : ''}
-	              ${canSyncFromSource ? '<button class="btn btn-sm btn-sync-source-import">同步导入</button>' : ''}
-	              ${isOwner ? '<button class="btn btn-sm btn-edit-book">编辑</button>' : ''}
-              ${
-                canOperate && isNormal ? '<button class="btn btn-sm btn-unlist-book">下架</button>' : ''
-              }
-              ${
-                canOperate && (isUnlisted || isDeleted) ? '<button class="btn btn-sm btn-restore-book">恢复</button>' : ''
-              }
+          <li data-id="${b.id}" class="book-item">
+            <div class="item-info">
+              <div class="book-title-row">
+                <div class="item-title">${esc(b.title)}</div>
+                ${badges.length ? `<div class="book-badges">${badges.join('')}</div>` : ''}
+              </div>
+              <div class="book-meta-row">${chips.join('')}</div>
+            </div>
+            <div class="item-actions">
+              ${sourceMode ? `<a class="btn btn-sm" href="/read?book=${b.id}" target="_blank" rel="noopener">在线读</a>` : ''}
+              ${hasSource ? `<a class="btn btn-sm" href="/api/books/${b.id}/source" target="_blank" rel="noopener">下载</a>` : ''}
+              ${downloadOnly && canOperate ? '<button class="btn btn-sm btn-fix-source-meta">修复源信息</button>' : ''}
+              ${canSyncFromSource ? '<button class="btn btn-sm btn-sync-source-import">同步导入</button>' : ''}
+              ${isOwner ? '<button class="btn btn-sm btn-edit-book">编辑</button>' : ''}
+              ${canOperate && isNormal ? '<button class="btn btn-sm btn-unlist-book">下架</button>' : ''}
+              ${canOperate && (isUnlisted || isDeleted) ? '<button class="btn btn-sm btn-restore-book">恢复</button>' : ''}
               ${
                 canOperate && isDeleted && auth.role === 'super_admin'
                   ? '<button class="btn btn-sm btn-danger btn-purge-book">彻底清理</button>'

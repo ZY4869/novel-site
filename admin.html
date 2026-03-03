@@ -62,76 +62,101 @@
       <!-- 看板 -->
       <div class="admin-section" id="stats-panel" data-admin-tab="dashboard">
         <h3>📊 看板</h3>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px" id="stats-grid">
-          <div style="text-align:center;padding:16px;background:var(--bg);border-radius:var(--radius)">
-            <div style="font-size:28px;font-weight:700;color:var(--accent)" id="stat-books">-</div>
-            <div style="font-size:13px;color:var(--text-light)">书籍</div>
+        <div class="dash-toolbar">
+          <div class="dash-kind-tabs" id="dashboard-kind-tabs">
+            <button type="button" class="dash-pill active" data-kind="novel">小说</button>
+            <button type="button" class="dash-pill" data-kind="comic">漫画</button>
           </div>
-          <div style="text-align:center;padding:16px;background:var(--bg);border-radius:var(--radius)">
-            <div style="font-size:28px;font-weight:700;color:var(--accent)" id="stat-chapters">-</div>
-            <div style="font-size:13px;color:var(--text-light)">章节</div>
-          </div>
-          <div style="text-align:center;padding:16px;background:var(--bg);border-radius:var(--radius)">
-            <div style="font-size:28px;font-weight:700;color:var(--accent)" id="stat-words">-</div>
-            <div style="font-size:13px;color:var(--text-light)">总字数</div>
-          </div>
-
-          <div style="text-align:center;padding:16px;background:var(--bg);border-radius:var(--radius)">
-            <div style="font-size:28px;font-weight:700;color:var(--accent)" id="stat-comics">-</div>
-            <div style="font-size:13px;color:var(--text-light)">漫画</div>
-          </div>
-          <div style="text-align:center;padding:16px;background:var(--bg);border-radius:var(--radius)">
-            <div style="font-size:28px;font-weight:700;color:var(--accent)" id="stat-comic-pages">-</div>
-            <div style="font-size:13px;color:var(--text-light)">漫画总页数</div>
-          </div>
-
-          <div style="text-align:center;padding:16px;background:var(--bg);border-radius:var(--radius)">
-            <div style="font-size:28px;font-weight:700;color:var(--accent)" id="stat-novel-views-today">-</div>
-            <div style="font-size:13px;color:var(--text-light)">今日阅读（小说）</div>
-          </div>
-          <div style="text-align:center;padding:16px;background:var(--bg);border-radius:var(--radius)">
-            <div style="font-size:28px;font-weight:700;color:var(--accent)" id="stat-novel-views-30d">-</div>
-            <div style="font-size:13px;color:var(--text-light)">近30天阅读（小说）</div>
-          </div>
-          <div style="text-align:center;padding:16px;background:var(--bg);border-radius:var(--radius)">
-            <div style="font-size:28px;font-weight:700;color:var(--accent)" id="stat-novel-views-total">-</div>
-            <div style="font-size:13px;color:var(--text-light)">累计阅读（小说）</div>
-          </div>
-
-          <div style="text-align:center;padding:16px;background:var(--bg);border-radius:var(--radius)">
-            <div style="font-size:28px;font-weight:700;color:var(--accent)" id="stat-comic-views-today">-</div>
-            <div style="font-size:13px;color:var(--text-light)">今日阅读（漫画）</div>
-          </div>
-          <div style="text-align:center;padding:16px;background:var(--bg);border-radius:var(--radius)">
-            <div style="font-size:28px;font-weight:700;color:var(--accent)" id="stat-comic-views-30d">-</div>
-            <div style="font-size:13px;color:var(--text-light)">近30天阅读（漫画）</div>
-          </div>
-          <div style="text-align:center;padding:16px;background:var(--bg);border-radius:var(--radius)">
-            <div style="font-size:28px;font-weight:700;color:var(--accent)" id="stat-comic-views-total">-</div>
-            <div style="font-size:13px;color:var(--text-light)">累计阅读（漫画）</div>
-          </div>
-
-          <div style="text-align:center;padding:16px;background:var(--bg);border-radius:var(--radius)">
-            <div style="font-size:28px;font-weight:700;color:var(--accent)" id="stat-pv">-</div>
-            <div style="font-size:13px;color:var(--text-light)">今日 PV</div>
-          </div>
-          <div style="text-align:center;padding:16px;background:var(--bg);border-radius:var(--radius)">
-            <div style="font-size:28px;font-weight:700;color:var(--accent)" id="stat-uv">-</div>
-            <div style="font-size:13px;color:var(--text-light)">今日 UV</div>
-          </div>
-          <div style="text-align:center;padding:16px;background:var(--bg);border-radius:var(--radius)">
-            <div style="font-size:28px;font-weight:700;color:var(--accent)" id="stat-total-pv">-</div>
-            <div style="font-size:13px;color:var(--text-light)">累计 PV</div>
-          </div>
-          <div style="text-align:center;padding:16px;background:var(--bg);border-radius:var(--radius)">
-            <div style="font-size:28px;font-weight:700;color:var(--accent)" id="stat-total-uv">-</div>
-            <div style="font-size:13px;color:var(--text-light)">累计 UV</div>
+          <div class="dash-search">
+            <input type="search" id="dashboard-search" placeholder="搜索书籍..." autocomplete="off">
+            <div class="dash-search-results" id="dashboard-search-results" style="display:none"></div>
           </div>
         </div>
-        <!-- 热门 -->
-        <div id="hot-books" style="margin-top:16px"></div>
-        <div id="hot-chapters" style="margin-top:16px"></div>
-        <div id="hot-comics" style="margin-top:16px"></div>
+
+        <div class="dash-split">
+          <div class="dash-card" id="dashboard-now">
+            <div class="dash-card-title">正在观看</div>
+            <div class="dash-card-body" id="dashboard-now-body"><span style="color:var(--text-light)">加载中...</span></div>
+          </div>
+          <div class="dash-card" id="dashboard-detail">
+            <div class="dash-card-title">内容统计</div>
+            <div class="dash-card-body" id="dashboard-detail-body"><span style="color:var(--text-light)">请选择一本书或一部漫画</span></div>
+          </div>
+        </div>
+
+        <div class="dash-section-title">全站概览</div>
+        <div class="dash-stats-grid" id="stats-grid">
+          <div class="dash-stat">
+            <div class="dash-stat-value" id="stat-books">-</div>
+            <div class="dash-stat-label">书籍</div>
+          </div>
+          <div class="dash-stat">
+            <div class="dash-stat-value" id="stat-chapters">-</div>
+            <div class="dash-stat-label">章节</div>
+          </div>
+          <div class="dash-stat">
+            <div class="dash-stat-value" id="stat-words">-</div>
+            <div class="dash-stat-label">总字数</div>
+          </div>
+
+          <div class="dash-stat">
+            <div class="dash-stat-value" id="stat-comics">-</div>
+            <div class="dash-stat-label">漫画</div>
+          </div>
+          <div class="dash-stat">
+            <div class="dash-stat-value" id="stat-comic-pages">-</div>
+            <div class="dash-stat-label">漫画总页数</div>
+          </div>
+
+          <div class="dash-stat">
+            <div class="dash-stat-value" id="stat-novel-views-today">-</div>
+            <div class="dash-stat-label">今日阅读（小说）</div>
+          </div>
+          <div class="dash-stat">
+            <div class="dash-stat-value" id="stat-novel-views-30d">-</div>
+            <div class="dash-stat-label">近30天阅读（小说）</div>
+          </div>
+          <div class="dash-stat">
+            <div class="dash-stat-value" id="stat-novel-views-total">-</div>
+            <div class="dash-stat-label">累计阅读（小说）</div>
+          </div>
+
+          <div class="dash-stat">
+            <div class="dash-stat-value" id="stat-comic-views-today">-</div>
+            <div class="dash-stat-label">今日阅读（漫画）</div>
+          </div>
+          <div class="dash-stat">
+            <div class="dash-stat-value" id="stat-comic-views-30d">-</div>
+            <div class="dash-stat-label">近30天阅读（漫画）</div>
+          </div>
+          <div class="dash-stat">
+            <div class="dash-stat-value" id="stat-comic-views-total">-</div>
+            <div class="dash-stat-label">累计阅读（漫画）</div>
+          </div>
+
+          <div class="dash-stat">
+            <div class="dash-stat-value" id="stat-pv">-</div>
+            <div class="dash-stat-label">今日 PV</div>
+          </div>
+          <div class="dash-stat">
+            <div class="dash-stat-value" id="stat-uv">-</div>
+            <div class="dash-stat-label">今日 UV</div>
+          </div>
+          <div class="dash-stat">
+            <div class="dash-stat-value" id="stat-total-pv">-</div>
+            <div class="dash-stat-label">累计 PV</div>
+          </div>
+          <div class="dash-stat">
+            <div class="dash-stat-value" id="stat-total-uv">-</div>
+            <div class="dash-stat-label">累计 UV</div>
+          </div>
+        </div>
+
+        <div class="dash-hot-grid">
+          <div class="dash-card" id="hot-books"></div>
+          <div class="dash-card" id="hot-chapters"></div>
+          <div class="dash-card" id="hot-comics"></div>
+        </div>
       </div>
 
       <!-- 存储空间 -->
@@ -523,6 +548,10 @@
       <!-- 书籍管理 -->
       <div class="admin-section" data-admin-tab="novel" data-admin-subtab="book_manage" data-admin-subtab-label="书籍管理" data-admin-subtab-order="10">
         <h3>📚 书籍管理</h3>
+        <div class="form-group" style="max-width:420px">
+          <label>搜索</label>
+          <input type="search" id="book-search" placeholder="按书名/作者搜索..." autocomplete="off">
+        </div>
         <div id="book-list-msg"></div>
         <ul class="admin-list" id="book-list"><li class="loading">加载中...</li></ul>
       </div>

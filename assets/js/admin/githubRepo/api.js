@@ -29,6 +29,13 @@ export async function scanGitHubRepo(type) {
   return data;
 }
 
+export async function fetchGitHubRepoScanCache(type) {
+  const res = await api('GET', `/api/admin/github-repo/cache?type=${encodeURIComponent(type)}`);
+  const data = await readJson(res);
+  if (!res.ok) throw new Error(data.error || '读取缓存失败');
+  return data;
+}
+
 export async function listGitHubComicPages(dir) {
   const res = await api('GET', `/api/admin/github-repo/comic-pages?dir=${encodeURIComponent(dir)}`);
   const data = await readJson(res);
@@ -62,4 +69,3 @@ export async function fetchGitHubRawBlob(path) {
   }
   return await res.blob();
 }
-

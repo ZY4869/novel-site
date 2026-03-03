@@ -1,5 +1,5 @@
 import { filenameToTitle, showMsg } from '../ui.js';
-import { bindGitHubComicDir, bindGitHubNovel, listGitHubComicPages, scanGitHubRepo } from './api.js';
+import { bindGitHubComicDir, bindGitHubNovel, fetchGitHubRepoScanCache, listGitHubComicPages, scanGitHubRepo } from './api.js';
 import { renderComicList, renderNovelList } from './render.js';
 import { isBusy, setBusy } from './state.js';
 import { syncImportGitHubCbz } from './syncComicCbz.js';
@@ -26,6 +26,13 @@ export function initGitHubRepoContentUi({ onNovelDone, onComicDone } = {}) {
   document.getElementById('gh-repo-scan-novels-btn')?.addEventListener('click', () => scanNovels());
   document.getElementById('gh-repo-scan-comics-btn')?.addEventListener('click', () => scanComics());
   initGitHubNovelBatchUi({ onNovelDone });
+
+  window.addEventListener('admin:role-changed', (e) => {
+    const role = String(e?.detail?.role || '');
+    if (role !== 'super_admin') return;
+    loadCachedNovels();
+    loadCachedComics();
+  });
 
   document.getElementById('gh-repo-novels-list')?.addEventListener('click', async (e) => {
     const li = e.target.closest('li[data-path]');
@@ -145,6 +152,33 @@ export function initGitHubRepoContentUi({ onNovelDone, onComicDone } = {}) {
       }
     }
   });
+}
+
+async function loadCachedNovels() {
+  const el = document.getElementById('gh-repo-novels-list');
+  if (!el) return;
+
+  try {
+    const data = await fetchGitHubRepoScanCache('novels');
+    if (!data?.cached) return;
+    renderNovelList(data.items || []);
+    refreshGitHubNovelBatchUi();
+    const ts = data.updatedAt ? `（上次扫描：${String(data.updatedAt)}）` : '';
+    showMsg('gh-repo-novels-msg', `已加载缓存：${(data.items || []).length} 个文件${ts}`, '');
+  } catch {}
+}
+
+async function loadCachedComics() {
+  const el = document.getElementById('gh-repo-comics-list');
+  if (!el) return;
+
+  try {
+    const data = await fetchGitHubRepoScanCache('comics');
+    if (!data?.cached) return;
+    renderComicList(data.items || []);
+    const ts = data.updatedAt ? `（上次扫描：${String(data.updatedAt)}）` : '';
+    showMsg('gh-repo-comics-msg', `已加载缓存：${(data.items || []).length} 个条目${ts}`, '');
+  } catch {}
 }
 
 async function scanNovels() {

@@ -206,7 +206,7 @@ wrangler d1 execute novel-db --file schema.sql --remote
 如果你确实是从旧版本升级：
 - 先备份（可在 D1 控制台导出或用 `wrangler d1 export` 等方式，具体以你当前 wrangler 版本命令为准）
 - 再按迁移文件顺序逐个执行
-- 当前迁移文件顺序：`001_stats_and_roles.sql` → `002_github_oauth.sql` → `003_chapter_version.sql` → `004_comic_stats.sql`
+- 当前迁移文件顺序：`001_stats_and_roles.sql` → `002_github_oauth.sql` → `003_chapter_version.sql` → `004_comic_stats.sql` → `005_reading_progress.sql` → `006_github_repo_scan_cache.sql`
 
 ---
 

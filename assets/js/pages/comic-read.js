@@ -16,6 +16,10 @@ if (!comicId || !/^\d+$/.test(comicId)) {
 let comic = null;
 let currentPage = 1;
 
+const ADMIN_PROGRESS_MIN_INTERVAL_MS = 5000;
+let lastAdminProgressAt = 0;
+let lastAdminProgressKey = '';
+
 function showMsg(text, type) {
   const el = qs('#msg');
   el.className = type ? `msg msg-${type}` : '';
@@ -34,6 +38,25 @@ function getSavedPage(id) {
 function saveProgress(id, page, title) {
   try {
     localStorage.setItem('comic_reading_' + id, JSON.stringify({ page, title, time: Date.now() }));
+  } catch {}
+
+  reportAdminProgress(id, page);
+}
+
+function reportAdminProgress(id, page) {
+  const now = Date.now();
+  const key = `${id}:${page}`;
+  if (key === lastAdminProgressKey && now - lastAdminProgressAt < ADMIN_PROGRESS_MIN_INTERVAL_MS) return;
+  lastAdminProgressAt = now;
+  lastAdminProgressKey = key;
+
+  try {
+    fetch('/api/admin/progress', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'comic', comicId: Number(id), page: Number(page) }),
+    }).catch(() => {});
   } catch {}
 }
 

@@ -65,7 +65,7 @@ export async function onRequestGet(context) {
 
     // 热门章节（总阅读量Top10）
     const { results: hotChapters } = await env.DB.prepare(`
-      SELECT cs.chapter_id, c.title as chapter_title, b.title as book_title, cs.views
+      SELECT cs.chapter_id, c.book_id, c.title as chapter_title, b.title as book_title, cs.views
       FROM chapter_stats cs
       JOIN chapters c ON cs.chapter_id = c.id
       JOIN books b ON c.book_id = b.id

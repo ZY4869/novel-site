@@ -9,7 +9,7 @@ export async function onRequestGet(context) {
     "SELECT id, title, description, cover_key, page_count, updated_at FROM comics ORDER BY updated_at DESC"
   ).all();
 
-  const comics = (results || []).map(c => ({
+  const comics = (results || []).map((c) => ({
     ...c,
     cover_url: c.cover_key ? `/api/comics/${c.id}/cover` : null,
   }));

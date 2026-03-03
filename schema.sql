@@ -173,3 +173,42 @@ CREATE TABLE IF NOT EXISTS comic_stats (
   FOREIGN KEY (comic_id) REFERENCES comics(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_comic_stats_date ON comic_stats(date);
+
+/* ========== 阅读进度（管理端看板用） ========== */
+
+CREATE TABLE IF NOT EXISTS book_reading_progress (
+  user_id INTEGER NOT NULL,
+  book_id INTEGER NOT NULL,
+  chapter_id INTEGER DEFAULT NULL,
+  source_chapter_index INTEGER DEFAULT NULL,
+  scroll_pct REAL DEFAULT 0,
+  updated_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, book_id),
+  FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE,
+  FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE,
+  FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_book_reading_progress_user_updated ON book_reading_progress(user_id, updated_at);
+
+CREATE TABLE IF NOT EXISTS comic_reading_progress (
+  user_id INTEGER NOT NULL,
+  comic_id INTEGER NOT NULL,
+  page INTEGER DEFAULT 1,
+  updated_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, comic_id),
+  FOREIGN KEY (user_id) REFERENCES admin_users(id) ON DELETE CASCADE,
+  FOREIGN KEY (comic_id) REFERENCES comics(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_comic_reading_progress_user_updated ON comic_reading_progress(user_id, updated_at);
+
+/* ========== GitHub 扫描缓存（管理端看板用） ========== */
+
+CREATE TABLE IF NOT EXISTS github_repo_scan_cache (
+  type TEXT NOT NULL,
+  config_hash TEXT NOT NULL,
+  base TEXT NOT NULL,
+  items_json TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (type, config_hash)
+);
+CREATE INDEX IF NOT EXISTS idx_github_repo_scan_cache_type_updated ON github_repo_scan_cache(type, updated_at);

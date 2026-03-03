@@ -1,5 +1,5 @@
 // GET /api/admin/github-repo/scan?type=novels|comics — 扫描 GitHub 仓库目录内容（仅超管）
-import { checkAdmin, requireSuperAdmin } from '../../_utils.js';
+import { checkAdmin, requireSuperAdmin, sha256Hash } from '../../_utils.js';
 import { getRepoConfig, githubApiJson, sanitizeRepoPath } from '../../utils/githubRepoContent.js';
 
 function encodePathSegments(path) {
@@ -25,6 +25,24 @@ function isCbzFile(name) {
   return n.endsWith('.cbz') || n.endsWith('.zip');
 }
 
+async function saveScanCache(env, { type, configHash, base, items }) {
+  try {
+    const itemsJson = JSON.stringify(Array.isArray(items) ? items : []);
+    await env.DB.prepare(
+      `
+        INSERT INTO github_repo_scan_cache (type, config_hash, base, items_json, updated_at)
+        VALUES (?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(type, config_hash) DO UPDATE SET
+          base = excluded.base,
+          items_json = excluded.items_json,
+          updated_at = datetime('now')
+      `
+    )
+      .bind(type, configHash, base, itemsJson)
+      .run();
+  } catch {}
+}
+
 export async function onRequestGet(context) {
   const { request, env } = context;
 
@@ -44,6 +62,7 @@ export async function onRequestGet(context) {
 
     const base = type === 'novels' ? config.novelsPath : config.comicsPath;
     const cleanBase = sanitizeRepoPath(base, [base]);
+    const configHash = await sha256Hash(`${config.owner}/${config.repo}@${config.branch}:${cleanBase}`);
     const apiPath = encodePathSegments(cleanBase);
 
     const urlPath = apiPath
@@ -57,6 +76,7 @@ export async function onRequestGet(context) {
         .filter((x) => x && x.type === 'file' && isNovelFile(x.name))
         .map((x) => ({ name: x.name, path: x.path, size: x.size || 0, sha: x.sha || '' }))
         .sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { numeric: true, sensitivity: 'base' }));
+      context.waitUntil(saveScanCache(env, { type, configHash, base: cleanBase, items }));
       return Response.json({ success: true, type, base: cleanBase, items });
     }
 
@@ -73,6 +93,7 @@ export async function onRequestGet(context) {
         if (a.kind !== b.kind) return a.kind === 'dir' ? -1 : 1;
         return String(a.name).localeCompare(String(b.name), undefined, { numeric: true, sensitivity: 'base' });
       });
+    context.waitUntil(saveScanCache(env, { type, configHash, base: cleanBase, items }));
     return Response.json({ success: true, type, base: cleanBase, items });
   } catch (e) {
     return Response.json({ error: e.message || 'Scan failed' }, { status: 400 });
