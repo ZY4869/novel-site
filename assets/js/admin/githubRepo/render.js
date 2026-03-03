@@ -10,10 +10,15 @@ export function renderNovelList(items) {
   el.innerHTML = items
     .map(
       (it) => `
-        <li data-path="${esc(it.path)}" data-name="${esc(it.name)}">
+        <li data-path="${esc(it.path)}" data-name="${esc(it.name)}" data-size="${Number(it.size || 0) || 0}">
           <div class="item-info">
-            <div class="item-title">${esc(it.name)}</div>
-            <div class="item-meta">${formatBytes(it.size || 0)} / ${esc(it.path)}</div>
+            <label class="gh-select-row">
+              <input type="checkbox" class="gh-novel-select" checked>
+              <div>
+                <div class="item-title">${esc(it.name)}</div>
+                <div class="item-meta">${formatBytes(it.size || 0)} / ${esc(it.path)}</div>
+              </div>
+            </label>
           </div>
           <div class="item-actions">
             <button class="btn btn-sm btn-gh-bind-novel">直连绑定</button>
@@ -53,4 +58,3 @@ export function renderComicList(items) {
     })
     .join('');
 }
-

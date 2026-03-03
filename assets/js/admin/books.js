@@ -2,12 +2,26 @@ import { api, uploadBookSource } from './api.js';
 import { auth } from './state.js';
 import { esc, filenameToTitle, formatBytes, showMsg } from './ui.js';
 import { openBookEditOverlay } from './bookEditModal.js';
+import { initBooksManagePage, updateBooksManagePage } from './booksManagePage.js';
+import { canSyncImportFromSource, syncImportFromBookSource } from './booksSync.js';
 import { computeSourceMetaFromArrayBuffer, computeSourceMetaFromFile, saveSourceMeta, uploadCoverIfEmpty } from './sourceMeta.js';
 
 let booksCache = [];
 let booksPromise = null;
+let syncingSourceImport = false;
 
 export function initBooks() {
+  initBooksManagePage();
+  document.addEventListener('books:refresh', async (e) => {
+    await refreshAllBooks();
+    const bookId = Number(e?.detail?.bookId || 0) || null;
+    if (!bookId) return;
+    const manageBook = document.getElementById('manage-book');
+    if (manageBook && String(manageBook.value || '') === String(bookId)) {
+      manageBook.dispatchEvent(new Event('change'));
+    }
+  });
+
   document.getElementById('create-book-btn')?.addEventListener('click', createBook);
   document.getElementById('create-book-from-source-btn')?.addEventListener('click', createBookFromSource);
 
@@ -32,6 +46,11 @@ export function initBooks() {
 
 	    if (e.target.classList.contains('btn-fix-source-meta')) {
 	      await fixSourceMeta(book);
+	      return;
+	    }
+
+	    if (e.target.classList.contains('btn-sync-source-import')) {
+	      await syncImportFromSourceToLocal(book);
 	      return;
 	    }
 
@@ -143,10 +162,39 @@ async function fixSourceMeta(book) {
   }
 }
 
+async function syncImportFromSourceToLocal(book) {
+  if (syncingSourceImport) return;
+  if (!book?.source_is_github) return alert('仅支持直连绑定（GitHub）的书籍同步导入');
+  if (!canSyncImportFromSource(book)) return alert('该书籍不满足同步导入条件（需 TXT/EPUB 且未生成章节，且 ≤50MB）');
+
+  if (
+    !confirm(
+      `确定把《${book.title}》改为“同步导入”吗？\n\n将下载源文件并导入为章节，同时把源文件保存到 R2。`
+    )
+  ) {
+    return;
+  }
+
+  try {
+    syncingSourceImport = true;
+    await syncImportFromBookSource(book, {
+      onStatus: (t) => showMsg('book-list-msg', t, ''),
+      onProgress: ({ done, total, pct }) => showMsg('book-list-msg', `${done}/${total} 章（${pct}%）`, ''),
+    });
+    showMsg('book-list-msg', `同步导入完成：《${book.title}》`, 'success');
+    document.dispatchEvent(new CustomEvent('books:refresh', { detail: { bookId: Number(book.id) } }));
+  } catch (e) {
+    showMsg('book-list-msg', e.message || '同步导入失败', 'error');
+  } finally {
+    syncingSourceImport = false;
+  }
+}
+
 export async function refreshAllBooks() {
   const data = await fetchBooks();
   renderBookList(data);
   renderBookSelects(data);
+  updateBooksManagePage(data.books || []);
 }
 
 export async function loadBookSelects() {
@@ -191,11 +239,12 @@ function renderBookList(data) {
         const isDeleted = status === 'deleted';
         const isPurging = status === 'purging';
 
-        const isOwner = auth.role !== 'demo' || b.created_by === auth.userId;
+	        const isOwner = auth.role !== 'demo' || b.created_by === auth.userId;
 	        const canOperate = auth.role !== 'demo' || b.created_by === auth.userId;
 	        const hasSource = !!b.has_source;
 	        const downloadOnly = (b.chapter_count || 0) === 0 && hasSource;
 	        const sourceMode = downloadOnly ? getSourceReadMode(b) : null;
+	        const canSyncFromSource = downloadOnly && canOperate && !!b.source_is_github && canSyncImportFromSource(b);
 	        const sourceInfo = hasSource ? ` / 源文件 ${formatBytes(b.source_size || 0)}` : '';
 
 	        const sourceChapterCount = normalizeCount(b.source_chapter_count);
@@ -224,18 +273,21 @@ function renderBookList(data) {
 
         return `
           <li data-id="${b.id}">
-            <div class="item-info">
-              <div class="item-title">${esc(b.title)}${
-          downloadOnly
-            ? ` <span style="font-size:11px;color:var(--text-light)">${sourceMode ? '(源文件可读)' : '(仅可下载)'}</span>`
-            : ''
-	        }${statusBadge}${auth.role === 'demo' && !isOwner ? ' <span style="font-size:11px;color:var(--text-light)">(他人)</span>' : ''}</div>
+	            <div class="item-info">
+	              <div class="item-title">${esc(b.title)}${
+	          downloadOnly
+	            ? ` <span style="font-size:11px;color:var(--text-light)">${sourceMode ? '(源文件可读)' : '(仅可下载)'}</span>${
+	              b.source_is_github ? ' <span style="font-size:11px;color:var(--text-light)">(直连)</span>' : ''
+	            }`
+	            : ''
+		        }${statusBadge}${auth.role === 'demo' && !isOwner ? ' <span style="font-size:11px;color:var(--text-light)">(他人)</span>' : ''}</div>
 	              <div class="item-meta">${b.author ? `${esc(b.author)} / ` : ''}${displayChapterCount} 章 / ${displayWordCount} 字${sourceStatsBadge}${sourceInfo}${isDeleted ? deleteAtText : ''}</div>
 	            </div>
 	            <div class="item-actions">
 	              ${sourceMode ? `<a class="btn btn-sm" href="/read?book=${b.id}" target="_blank" rel="noopener">在线读</a>` : ''}
 	              ${hasSource ? `<a class="btn btn-sm" href="/api/books/${b.id}/source" target="_blank" rel="noopener">下载</a>` : ''}
 	              ${downloadOnly && canOperate ? '<button class="btn btn-sm btn-fix-source-meta">修复源信息</button>' : ''}
+	              ${canSyncFromSource ? '<button class="btn btn-sm btn-sync-source-import">同步导入</button>' : ''}
 	              ${isOwner ? '<button class="btn btn-sm btn-edit-book">编辑</button>' : ''}
               ${
                 canOperate && isNormal ? '<button class="btn btn-sm btn-unlist-book">下架</button>' : ''

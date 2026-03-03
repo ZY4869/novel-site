@@ -41,6 +41,8 @@ export async function onRequestPost(context) {
   const author = String(body.author || '').trim().slice(0, 100);
   const description = String(body.description || '').trim().slice(0, 2000);
   const path = String(body.path || '').trim();
+  const clientName = typeof body.name === 'string' ? body.name.trim() : '';
+  const clientSize = Number(body.size || 0);
 
   if (!title) return Response.json({ error: '请输入书名' }, { status: 400 });
   if (!path) return Response.json({ error: 'Missing path' }, { status: 400 });
@@ -52,14 +54,44 @@ export async function onRequestPost(context) {
     const cleanPath = sanitizeRepoPath(path, [config.novelsPath]);
     if (!isAllowedNovelFile(cleanPath)) return Response.json({ error: '仅支持 TXT/EPUB 文件绑定' }, { status: 400 });
 
-    const apiPath = encodePathSegments(cleanPath);
-    const meta = await githubApiJson(env, `/repos/${config.owner}/${config.repo}/contents/${apiPath}`, { ref: config.branch });
-    if (!meta || meta.type !== 'file') return Response.json({ error: 'GitHub 文件不存在或不是文件' }, { status: 404 });
-
     const sourceKey = `gh:${cleanPath}`;
-    const sourceName = String(meta.name || cleanPath.split('/').pop() || 'file').slice(0, 120);
+
+    const existing = await env.DB.prepare('SELECT id, title, source_name, source_size FROM books WHERE source_key = ? LIMIT 1')
+      .bind(sourceKey)
+      .first();
+    if (existing?.id) {
+      return Response.json({
+        success: true,
+        alreadyExists: true,
+        book: {
+          id: existing.id,
+          title: existing.title || '',
+          source_name: existing.source_name || null,
+          source_size: Number(existing.source_size || 0) || 0,
+        },
+      });
+    }
+
+    let sourceName = String(cleanPath.split('/').pop() || 'file');
+    let sourceSize = 0;
+
+    const safeClientSize = Number.isFinite(clientSize) && clientSize >= 0 ? Math.floor(clientSize) : null;
+    const baseName = sourceName;
+    const safeClientName = clientName && clientName === baseName ? clientName : null;
+
+    if (safeClientName && safeClientSize !== null) {
+      sourceName = safeClientName;
+      sourceSize = safeClientSize;
+    } else {
+      const apiPath = encodePathSegments(cleanPath);
+      const meta = await githubApiJson(env, `/repos/${config.owner}/${config.repo}/contents/${apiPath}`, { ref: config.branch });
+      if (!meta || meta.type !== 'file') return Response.json({ error: 'GitHub 文件不存在或不是文件' }, { status: 404 });
+      sourceName = String(meta.name || sourceName);
+      sourceSize = Number(meta.size || 0) || 0;
+    }
+
+    sourceName = sourceName.slice(0, 120);
     const sourceType = guessSourceType(sourceName);
-    const sourceSize = Number(meta.size || 0) || 0;
 
     const result = await env.DB.prepare(
       `
@@ -86,4 +118,3 @@ export async function onRequestPost(context) {
     return Response.json({ error: e.message || 'Failed' }, { status: 400 });
   }
 }
-

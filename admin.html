@@ -391,6 +391,15 @@
           <button class="btn btn-sm" id="gh-repo-scan-novels-btn">扫描 GitHub 小说目录</button>
           <span id="gh-repo-novels-msg" style="font-size:12px;color:var(--text-light)"></span>
         </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:-4px 0 10px">
+          <label style="display:flex;gap:6px;align-items:center;font-size:13px;color:var(--text-light)">
+            <input type="checkbox" id="gh-repo-novels-select-all"> 全选
+          </label>
+          <button class="btn btn-sm" id="gh-repo-novels-batch-bind-btn" disabled>批量直连绑定</button>
+          <button class="btn btn-sm" id="gh-repo-novels-batch-sync-btn" disabled>批量同步导入</button>
+          <button class="btn btn-sm" id="gh-repo-novels-batch-cancel-btn" style="display:none">停止</button>
+          <span id="gh-repo-novels-selected-hint" style="font-size:12px;color:var(--text-light)"></span>
+        </div>
         <ul class="admin-list" id="gh-repo-novels-list"><li style="color:var(--text-light)">请先扫描</li></ul>
         <div style="font-size:12px;color:var(--text-light);margin-top:8px">直连：不落地到 R2；同步：导入到本地 D1+R2（生成章节 + 保留源文件）。</div>
       </div>
@@ -469,7 +478,47 @@
       <!-- 书籍管理 -->
       <div class="admin-section" data-admin-tab="novel">
         <h3>📚 书籍管理</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+          <button class="btn btn-sm" id="open-books-manage-btn" type="button">打开书籍管理页</button>
+        </div>
+        <div id="book-list-msg"></div>
         <ul class="admin-list" id="book-list"><li class="loading">加载中...</li></ul>
+      </div>
+
+      <!-- 书籍管理页（直连转同步） -->
+      <div class="settings-overlay" id="books-manage-overlay">
+        <div class="settings-panel" style="max-width:860px;border-radius:var(--radius)">
+          <h3>书籍管理<button class="close-btn" id="close-books-manage">✕</button></h3>
+
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end;margin-bottom:10px">
+            <div style="flex:1;min-width:220px">
+              <label style="font-size:12px;color:var(--text-light)">搜索</label>
+              <input type="text" id="books-manage-search" placeholder="按书名/作者搜索" maxlength="100">
+            </div>
+            <label style="display:flex;gap:6px;align-items:center;font-size:13px;color:var(--text-light)">
+              <input type="checkbox" id="books-manage-only-gh"> 仅直连（GitHub）
+            </label>
+            <label style="display:flex;gap:6px;align-items:center;font-size:13px;color:var(--text-light)">
+              <input type="checkbox" id="books-manage-only-can-sync"> 仅可同步导入
+            </label>
+          </div>
+
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+            <label style="display:flex;gap:6px;align-items:center;font-size:13px;color:var(--text-light)">
+              <input type="checkbox" id="books-manage-select-all"> 全选
+            </label>
+            <button class="btn btn-sm" id="books-manage-batch-sync-btn" disabled>批量同步导入</button>
+            <button class="btn btn-sm" id="books-manage-batch-cancel-btn" style="display:none">停止</button>
+            <span id="books-manage-selected-hint" style="font-size:12px;color:var(--text-light)"></span>
+          </div>
+          <div id="books-manage-msg"></div>
+
+          <ul class="admin-list" id="books-manage-list"><li style="padding:12px 0;color:var(--text-light)">加载中...</li></ul>
+
+          <div style="font-size:12px;color:var(--text-light);margin-top:8px">
+            说明：仅对“直连绑定（GitHub）且未生成章节的 TXT/EPUB（≤50MB）”提供同步导入。
+          </div>
+        </div>
       </div>
 
       <!-- 书籍编辑弹窗 -->

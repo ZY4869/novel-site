@@ -14,6 +14,7 @@ export async function onRequestGet(context) {
     b.source_name, b.source_type, b.source_size, b.source_uploaded_at,
     b.source_chapter_count, b.source_word_count,
     CASE WHEN b.source_key IS NOT NULL THEN 1 ELSE 0 END as has_source,
+    CASE WHEN b.source_key LIKE 'gh:%' THEN 1 ELSE 0 END as source_is_github,
     b.created_at, b.updated_at,
     (SELECT COUNT(*) FROM chapters WHERE book_id = b.id) as chapter_count,
     (SELECT COALESCE(SUM(word_count), 0) FROM chapters WHERE book_id = b.id) as total_words

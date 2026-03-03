@@ -9,13 +9,20 @@ export function setBusy(v) {
   busy = !!v;
 
   document
-    .querySelectorAll('#gh-repo-scan-novels-btn,#gh-repo-scan-comics-btn,#save-gh-repo-config-btn,#gh-repo-clear-token-btn')
+    .querySelectorAll(
+      '#gh-repo-scan-novels-btn,#gh-repo-scan-comics-btn,#save-gh-repo-config-btn,#gh-repo-clear-token-btn,' +
+        '#gh-repo-novels-select-all,#gh-repo-novels-batch-bind-btn,#gh-repo-novels-batch-sync-btn'
+    )
     .forEach((btn) => {
       btn.disabled = busy;
     });
 
   document.querySelectorAll('#gh-repo-novels-list button, #gh-repo-comics-list button').forEach((btn) => {
     btn.disabled = busy;
+  });
+
+  document.querySelectorAll('#gh-repo-novels-list input.gh-novel-select').forEach((cb) => {
+    cb.disabled = busy;
   });
 }
 
@@ -26,4 +33,3 @@ export function setLastConfig(cfg) {
 export function getLastConfig() {
   return lastConfig;
 }
-

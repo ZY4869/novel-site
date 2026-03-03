@@ -202,6 +202,38 @@
 .admin-list .item-meta { font-size: 12px; color: var(--text-light); margin-top: 2px; }
 .admin-list .item-actions { display: flex; gap: 6px; }
 
+/* 书籍管理：避免按钮挤压导致信息列过窄 */
+#book-list li,
+#books-manage-list li {
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-start;
+}
+#book-list .item-actions,
+#books-manage-list .item-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+@media (max-width: 700px) {
+  #book-list .item-actions,
+  #books-manage-list .item-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+/* GitHub 小说批量选择 */
+.gh-select-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  cursor: pointer;
+}
+.gh-select-row input[type='checkbox'] {
+  margin-top: 2px;
+}
+
 /* 书籍编辑弹窗（避免参与网格布局） */
 .settings-overlay {
   position: fixed;
