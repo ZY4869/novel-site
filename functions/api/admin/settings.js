@@ -134,6 +134,7 @@ export async function onRequestPost(context) {
       const s = String(base).trim();
       if (!s) return '';
       if (s.includes('\\') || s.includes('\0')) return '';
+      if (/^\/+$/.test(s) || s === '.' || s === './') return '/';
 
       const parts = s
         .replace(/^\/+/, '')
@@ -155,8 +156,8 @@ export async function onRequestPost(context) {
       if (!owner) return Response.json({ error: '请填写 owner' }, { status: 400 });
       if (!repo) return Response.json({ error: '请填写 repo' }, { status: 400 });
       if (!branch) return Response.json({ error: '请填写 branch' }, { status: 400 });
-      if (!novelsPath) return Response.json({ error: '小说目录不合法（示例：novels/）' }, { status: 400 });
-      if (!comicsPath) return Response.json({ error: '漫画目录不合法（示例：comics/）' }, { status: 400 });
+      if (!novelsPath) return Response.json({ error: '小说目录不合法（示例：novels/ 或 /）' }, { status: 400 });
+      if (!comicsPath) return Response.json({ error: '漫画目录不合法（示例：comics/ 或 /）' }, { status: 400 });
     }
 
     await env.DB.batch([

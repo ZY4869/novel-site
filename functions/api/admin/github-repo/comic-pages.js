@@ -48,7 +48,10 @@ export async function onRequestGet(context) {
     const cleanDir = sanitizeRepoPath(dir, [config.comicsPath]);
     const apiPath = encodePathSegments(cleanDir);
 
-    const data = await githubApiJson(env, `/repos/${config.owner}/${config.repo}/contents/${apiPath}`, { ref: config.branch });
+    const urlPath = apiPath
+      ? `/repos/${config.owner}/${config.repo}/contents/${apiPath}`
+      : `/repos/${config.owner}/${config.repo}/contents`;
+    const data = await githubApiJson(env, urlPath, { ref: config.branch });
     if (!Array.isArray(data)) return Response.json({ error: 'GitHub 返回不是目录列表' }, { status: 400 });
 
     const pages = data
@@ -66,4 +69,3 @@ export async function onRequestGet(context) {
     return Response.json({ error: e.message || 'Failed' }, { status: 400 });
   }
 }
-

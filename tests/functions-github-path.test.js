@@ -26,5 +26,12 @@ describe('functions/api/utils/githubRepoContent.js', () => {
     expect(() => sanitizeRepoPath('novels/a.txt', [])).toThrow();
     expect(() => sanitizeRepoPath('novels/a.txt', [''])).toThrow();
   });
-});
 
+  it('sanitizeRepoPath: allow root prefix', () => {
+    expect(sanitizeRepoPath('/', ['/'])).toBe('');
+    expect(sanitizeRepoPath('.', ['/'])).toBe('');
+    expect(sanitizeRepoPath('a.txt', ['/'])).toBe('a.txt');
+    expect(sanitizeRepoPath('/a.txt', ['/'])).toBe('a.txt');
+    expect(() => sanitizeRepoPath('../evil.txt', ['/'])).toThrow();
+  });
+});

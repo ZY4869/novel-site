@@ -14,6 +14,7 @@ function normalizeBaseDir(dir, fallback) {
   const s = String(val).trim();
   if (!s) return '';
   if (s.includes('\\') || s.includes('\0')) return '';
+  if (/^\/+$/.test(s) || s === '.' || s === './') return '/';
 
   const parts = s
     .replace(/^\/+/, '')
@@ -99,6 +100,9 @@ export function sanitizeRepoPath(inputPath, allowedPrefixes = []) {
   if (!raw) throw new Error('Empty path');
   if (raw.includes('\\') || raw.includes('\0')) throw new Error('Invalid path');
 
+  const allowRoot = (allowedPrefixes || []).some((p) => String(p ?? '').trim() === '/');
+  if (allowRoot && (/^\/+$/.test(raw) || raw === '.' || raw === './')) return '';
+
   const parts = raw
     .replace(/^\.\/+/, '')
     .replace(/^\/+/, '')
@@ -110,6 +114,8 @@ export function sanitizeRepoPath(inputPath, allowedPrefixes = []) {
   if (parts.some((p) => p === '.' || p === '..')) throw new Error('Invalid path');
 
   const clean = parts.join('/');
+
+  if (allowRoot) return clean;
 
   const allowed = (allowedPrefixes || [])
     .map((p) => normalizePathNoTrailingSlash(p))
@@ -180,6 +186,16 @@ export async function githubApiJson(env, urlPath, { ref } = {}) {
     const isBadRef = res.status === 404 && /No commit found for the ref/i.test(msg);
     if (isBadRef) {
       const err = new Error(`GitHub 分支/标签不存在：${msg}（请检查后台配置的 Branch，常见为 main 或 master）`);
+      err.status = res.status;
+      throw err;
+    }
+
+    const isNotFound = res.status === 404 && /not found/i.test(msg);
+    if (isNotFound) {
+      const hint = token
+        ? '（已使用 Token 仍 404：请检查 owner/repo、目录路径是否存在，或 Token 是否对该仓库有权限）'
+        : '（可能原因：仓库不存在 / 目录路径不存在 / 私有仓库未配置 Token）';
+      const err = new Error(`GitHub 资源不存在或无权限：${msg}${hint}`);
       err.status = res.status;
       throw err;
     }

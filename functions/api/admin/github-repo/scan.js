@@ -46,7 +46,10 @@ export async function onRequestGet(context) {
     const cleanBase = sanitizeRepoPath(base, [base]);
     const apiPath = encodePathSegments(cleanBase);
 
-    const data = await githubApiJson(env, `/repos/${config.owner}/${config.repo}/contents/${apiPath}`, { ref: config.branch });
+    const urlPath = apiPath
+      ? `/repos/${config.owner}/${config.repo}/contents/${apiPath}`
+      : `/repos/${config.owner}/${config.repo}/contents`;
+    const data = await githubApiJson(env, urlPath, { ref: config.branch });
     if (!Array.isArray(data)) return Response.json({ error: 'GitHub 返回不是目录列表' }, { status: 400 });
 
     if (type === 'novels') {
@@ -75,4 +78,3 @@ export async function onRequestGet(context) {
     return Response.json({ error: e.message || 'Scan failed' }, { status: 400 });
   }
 }
-
