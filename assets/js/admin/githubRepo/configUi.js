@@ -1,10 +1,17 @@
 import { showMsg } from '../ui.js';
 import { fetchGitHubRepoSettings, saveGitHubRepoSettings } from './api.js';
 import { getLastConfig, setBusy, setLastConfig } from './state.js';
+import { inferBasePathHints, parseGitHubRepoInput } from './parseUrl.js';
 
 export function initGitHubRepoConfigUi() {
   document.getElementById('save-gh-repo-config-btn')?.addEventListener('click', () => saveConfig());
   document.getElementById('gh-repo-clear-token-btn')?.addEventListener('click', () => clearToken());
+  document.getElementById('gh-repo-parse-btn')?.addEventListener('click', () => parseRepoUrl());
+  document.getElementById('gh-repo-url')?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    parseRepoUrl();
+  });
 }
 
 export async function loadGitHubRepoConfigUi() {
@@ -35,6 +42,45 @@ export async function loadGitHubRepoConfigUi() {
   } catch (e) {
     showMsg('gh-repo-config-msg', e.message || '加载失败', 'error');
   }
+}
+
+function parseRepoUrl() {
+  const urlEl = document.getElementById('gh-repo-url');
+  const s = urlEl?.value?.trim() || '';
+  if (!s) return showMsg('gh-repo-config-msg', '请粘贴 GitHub 仓库链接', 'error');
+
+  try {
+    const info = parseGitHubRepoInput(s);
+
+    const enabledEl = document.getElementById('gh-repo-enabled');
+    if (enabledEl && !enabledEl.checked) enabledEl.checked = true;
+
+    setField('gh-repo-owner', info.owner);
+    setField('gh-repo-name', info.repo);
+    if (info.branch) setField('gh-repo-branch', info.branch);
+
+    const hint = inferBasePathHints(info.subpath);
+    if (hint.novelsPath) setFieldIfEmpty('gh-repo-novels-path', hint.novelsPath);
+    if (hint.comicsPath) setFieldIfEmpty('gh-repo-comics-path', hint.comicsPath);
+    const notes = [
+      `已解析：${info.owner}/${info.repo}`,
+      info.branch ? `分支：${info.branch}` : null,
+      hint.note || null,
+    ].filter(Boolean);
+    showMsg('gh-repo-config-msg', notes.join('；'), 'success');
+  } catch (e) {
+    showMsg('gh-repo-config-msg', `仓库链接解析失败：${e.message || '未知错误'}`, 'error');
+  }
+}
+
+function setField(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.value = String(value ?? '');
+}
+
+function setFieldIfEmpty(id, value) {
+  const el = document.getElementById(id);
+  if (el && !String(el.value || '').trim()) el.value = String(value ?? '');
 }
 
 async function saveConfig() {
@@ -92,4 +138,3 @@ async function clearToken() {
     setBusy(false);
   }
 }
-
