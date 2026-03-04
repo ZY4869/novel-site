@@ -1,10 +1,11 @@
-export async function parseEpubArrayBuffer(arrayBuffer, filename, JSZip) {
+export async function parseEpubArrayBuffer(arrayBuffer, filename, JSZip, options) {
   if (!JSZip?.loadAsync) throw new Error('缺少 JSZip，无法解析 EPUB');
   const zip = await JSZip.loadAsync(arrayBuffer);
-  return await parseEpubZip(zip, filename);
+  return await parseEpubZip(zip, filename, options);
 }
 
-async function parseEpubZip(zip, filename) {
+async function parseEpubZip(zip, filename, options) {
+  const { keepEmpty = false } = options || {};
   const containerXml = await zip.file('META-INF/container.xml')?.async('text');
   if (!containerXml) throw new Error('无效的 EPUB：缺少 META-INF/container.xml');
   const containerDoc = new DOMParser().parseFromString(containerXml, 'application/xml');
@@ -35,17 +36,49 @@ async function parseEpubZip(zip, filename) {
 
   const spineIds = Array.from(opfDoc.querySelectorAll('spine > itemref[idref]')).map((it) => it.getAttribute('idref'));
 
+  const fileIndex = new Map();
+  for (const k of Object.keys(zip.files || {})) fileIndex.set(String(k).toLowerCase(), k);
+  function resolveActualPath(p) {
+    const path = String(p || '');
+    if (!path) return null;
+    if (zip.file(path)) return path;
+    const alt = fileIndex.get(path.toLowerCase());
+    if (alt && zip.file(alt)) return alt;
+    return null;
+  }
+
   const chapters = [];
-  for (const idref of spineIds) {
-    const item = manifest.get(idref);
-    const href = item?.href;
-    if (!href) continue;
-    const fullPath = normalizePath(opfDir + stripFragment(href));
-    const txt = await zip.file(fullPath)?.async('text');
-    if (!txt) continue;
+  const spineRefs = spineIds
+    .map((idref) => {
+      const item = manifest.get(idref);
+      const href = item?.href;
+      if (!href) return null;
+      const fullPath = normalizePath(opfDir + stripFragment(href));
+      return { href, fullPath, mediaType: item?.mediaType || '' };
+    })
+    .filter(Boolean);
+
+  let spinePaths = spineRefs
+    .filter((it) => {
+      const mt = String(it.mediaType || '').toLowerCase();
+      return mt.includes('html') || /\.(x?html?)$/i.test(it.fullPath);
+    })
+    .map((it) => it.fullPath);
+  if (spinePaths.length === 0) spinePaths = spineRefs.map((it) => it.fullPath);
+
+  for (let i = 0; i < spinePaths.length; i++) {
+    const fullPath = spinePaths[i];
+    const actual = resolveActualPath(fullPath);
+    const txt = actual ? await zip.file(actual)?.async('text') : null;
+    if (!txt) {
+      if (!keepEmpty) continue;
+      chapters.push({ title: `章节 ${i + 1}`, content: '', checked: true });
+      continue;
+    }
     const parsed = extractChapterText(txt);
-    if (!parsed.content) continue;
-    chapters.push({ title: parsed.title || `章节 ${chapters.length + 1}`, content: parsed.content, checked: true });
+    if (!parsed.content && !keepEmpty) continue;
+    const fallbackTitle = keepEmpty ? `章节 ${i + 1}` : `章节 ${chapters.length + 1}`;
+    chapters.push({ title: parsed.title || fallbackTitle, content: parsed.content || '', checked: true });
   }
 
   if (chapters.length === 0) throw new Error('未解析到章节内容');

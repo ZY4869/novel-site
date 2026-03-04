@@ -94,3 +94,47 @@
 .toc-list li a:hover { background: rgba(128,128,128,0.08); }
 .toc-list li a.current { color: var(--accent); font-weight: 600; }
 
+/* 源文件在线阅读：视图切换（源格式/纯文本） */
+.source-view-toggle {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: -14px 0 18px;
+}
+.source-view-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg);
+  transition: border-color 0.15s, background 0.15s;
+}
+.source-view-btn:hover { border-color: var(--accent); }
+.source-view-btn.active { border-color: var(--accent); background: var(--accent); color: #fff; }
+
+.source-raw-hint {
+  text-align: center;
+  font-size: 12px;
+  color: var(--accent-dark);
+  margin: -12px 0 14px;
+}
+
+/* TXT 源格式：取消缩进与强制两端对齐 */
+.reader-content.source-raw {
+  text-indent: 0;
+  text-align: initial;
+}
+
+/* EPUB 源格式：iframe 原版渲染 */
+.source-epub-iframe {
+  width: 100%;
+  border: 0;
+  display: block;
+  background: transparent;
+}
+
+/* 源格式下禁用翻页设置入口（避免误切） */
+body.source-view-raw [data-setting="reading-mode"] { display: none; }

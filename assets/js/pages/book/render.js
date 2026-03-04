@@ -90,8 +90,12 @@ function buildChaptersHtml(book, chapters, hasSource) {
     if (!hasSource) return '<div class="empty"><p>暂无章节</p></div>';
 
     const mode = getSourceReadMode(book);
-    const readLink = mode ? `<a href="/read?book=${book.id}">在线阅读源文件</a>` : '';
-    const note = mode ? `你可以先${readLink}，也可以到<a href="/admin">管理后台</a>导入生成章节。` : `该源文件格式暂不支持在线阅读，请下载源文件，或到<a href="/admin">管理后台</a>使用 TXT/EPUB 导入生成章节。`;
+    const readLinks = mode
+      ? `<a href="/read?book=${book.id}&source_view=raw">在线阅读（源格式）</a> / <a href="/read?book=${book.id}&source_view=text">在线阅读（纯文本）</a>`
+      : '';
+    const note = mode
+      ? `你可以先${readLinks}，也可以到<a href="/admin">管理后台</a>导入生成章节。`
+      : `该源文件格式暂不支持在线阅读，请下载源文件，或到<a href="/admin">管理后台</a>使用 TXT/EPUB 导入生成章节。`;
 
     const tocBuilder = mode
       ? `
@@ -127,7 +131,7 @@ function buildChaptersHtml(book, chapters, hasSource) {
 
 function buildSourceActionsHtml(book, chapterCount) {
   const mode = getSourceReadMode(book);
-  const canRead = chapterCount === 0 && !!mode;
+  const canRead = !!mode;
 
   const ch = Number.isInteger(book?.source_chapter_count) && book.source_chapter_count >= 0 ? book.source_chapter_count : null;
   const w = Number.isInteger(book?.source_word_count) && book.source_word_count >= 0 ? book.source_word_count : null;
@@ -139,7 +143,8 @@ function buildSourceActionsHtml(book, chapterCount) {
     <div style="margin-top:12px">
       ${sourceStats}
       <div style="margin-top:${sourceStats ? '8px' : '0'};display:flex;gap:8px;flex-wrap:wrap">
-        ${canRead ? `<a class="btn btn-sm" href="/read?book=${book.id}">在线阅读（源文件）</a>` : ''}
+        ${canRead ? `<a class="btn btn-sm" href="/read?book=${book.id}&source_view=raw">在线阅读（源格式）</a>` : ''}
+        ${canRead ? `<a class="btn btn-sm" href="/read?book=${book.id}&source_view=text">在线阅读（纯文本）</a>` : ''}
         <a class="btn btn-sm" href="/api/books/${book.id}/source" target="_blank" rel="noopener">
           下载源文件${book.source_name ? '：' + esc(book.source_name) : ''}${book.source_size ? '（' + formatBytes(book.source_size) + '）' : ''}
         </a>

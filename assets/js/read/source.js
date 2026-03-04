@@ -5,13 +5,30 @@ import { state, dom } from './state.js';
 import { restoreScrollPosition, saveScrollPosition } from './progress.js';
 import { updateBookmarkIcon } from './bookmarks.js';
 import { trackReadingStats } from './stats.js';
+import { applyReadingMode } from './pager.js';
+import { createEpubRawViewer } from './epubRawViewer.js';
 
 const JSZIP_SRC = '/jszip.min.js';
+const SOURCE_VIEW_PARAM = 'source_view';
 
 let jsZipPromise = null;
 let sourceBook = null;
 let sourceBookId = null;
+let sourceArrayBuffer = null;
 let sourceChapters = [];
+
+let sourceKind = null; // 'epub' | 'text'
+let sourceView = null; // 'raw' | 'text'
+
+let textChaptersCache = null;
+let epubTextChaptersCache = null;
+let epubViewer = null;
+
+let currentRawIframe = null;
+let themeObserver = null;
+let resizeListenerBound = false;
+let showForcedScrollHint = false;
+let renderSeq = 0;
 
 export async function initSourceRead() {
   const bookId = new URLSearchParams(location.search).get('book');
@@ -30,16 +47,22 @@ export async function initSourceRead() {
 
     const res = await fetch(`/api/books/${bookId}/source`);
     if (!res.ok) throw new Error(res.status === 404 ? '源文件不存在' : '源文件加载失败');
-    const ab = await res.arrayBuffer();
+    sourceArrayBuffer = await res.arrayBuffer();
 
-    sourceChapters = await parseSourceToChapters(sourceBook, ab);
-    if (sourceChapters.length === 0) throw new Error('未解析到内容');
+    sourceKind = getSourceKind(sourceBook);
+    if (!sourceKind) throw new Error('暂不支持在线阅读该源文件格式，请下载后查看');
+
+    sourceView = decideInitialSourceView(sourceKind);
+    saveSourceView(sourceKind, sourceView);
+
+    await ensureSourcePreparedForView();
+    applySourceViewSideEffects();
 
     renderTOC();
     bindHashNavigation();
 
     const initialPos = getInitialPos();
-    renderChapter(initialPos, true);
+    await renderChapter(initialPos, true);
   } catch (e) {
     if (dom.content) dom.content.innerHTML = `<div class="msg msg-error">${esc(e.message || '加载失败')}</div>`;
   }
@@ -51,38 +74,166 @@ async function fetchBook(bookId) {
   return await res.json();
 }
 
-async function parseSourceToChapters(book, arrayBuffer) {
+function getSourceKind(book) {
   const type = String(book?.source_type || '').toLowerCase();
   const name = String(book?.source_name || book?.title || '').toLowerCase();
+  if (type.includes('epub') || name.endsWith('.epub')) return 'epub';
+  if (type.startsWith('text/') || name.endsWith('.txt') || name.endsWith('.text')) return 'text';
+  return null;
+}
 
-  const isEpub = type.includes('epub') || name.endsWith('.epub');
-  if (isEpub) {
+function normalizeSourceView(v) {
+  const s = String(v || '').toLowerCase();
+  if (s === 'raw') return 'raw';
+  if (s === 'text') return 'text';
+  return null;
+}
+
+function getSourceViewStorageKey(kind) {
+  return `source_view:${kind}`;
+}
+
+function loadSavedSourceView(kind) {
+  try {
+    return normalizeSourceView(localStorage.getItem(getSourceViewStorageKey(kind)));
+  } catch {
+    return null;
+  }
+}
+
+function saveSourceView(kind, view) {
+  try {
+    localStorage.setItem(getSourceViewStorageKey(kind), String(view));
+  } catch {}
+}
+
+function decideInitialSourceView(kind) {
+  const sp = new URLSearchParams(location.search);
+  const fromQuery = normalizeSourceView(sp.get(SOURCE_VIEW_PARAM));
+  if (fromQuery) return fromQuery;
+  const saved = loadSavedSourceView(kind);
+  if (saved) return saved;
+  return kind === 'epub' ? 'raw' : 'text';
+}
+
+function updateUrlSourceView(view) {
+  const url = new URL(location.href);
+  url.searchParams.set(SOURCE_VIEW_PARAM, view);
+  history.replaceState(null, '', url.toString());
+}
+
+function getSavedReadingMode() {
+  try {
+    const v = localStorage.getItem('reading-mode');
+    return v === 'pager' ? 'pager' : 'scroll';
+  } catch {
+    return 'scroll';
+  }
+}
+
+function applySourceViewSideEffects() {
+  const isEpubRaw = sourceKind === 'epub' && sourceView === 'raw';
+  document.body.classList.toggle('source-view-raw', isEpubRaw);
+
+  showForcedScrollHint = false;
+  if (isEpubRaw) {
+    showForcedScrollHint = getSavedReadingMode() === 'pager';
+    state.settings.readingMode = 'scroll';
+    applyReadingMode();
+  } else {
+    state.settings.readingMode = getSavedReadingMode();
+  }
+}
+
+function getThemeColors() {
+  const cs = getComputedStyle(document.documentElement);
+  return {
+    bg: (cs.getPropertyValue('--bg') || '').trim(),
+    text: (cs.getPropertyValue('--text') || '').trim(),
+  };
+}
+
+function ensureThemeObserver() {
+  if (themeObserver) return;
+  themeObserver = new MutationObserver(() => {
+    if (sourceKind !== 'epub' || sourceView !== 'raw') return;
+    if (!epubViewer || !currentRawIframe) return;
+    epubViewer.applyThemeToIframe(currentRawIframe, getThemeColors());
+    epubViewer.resizeIframeToContent(currentRawIframe);
+  });
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+}
+
+function ensureResizeHandler() {
+  if (resizeListenerBound) return;
+  resizeListenerBound = true;
+  window.addEventListener(
+    'resize',
+    () => {
+      if (sourceKind !== 'epub' || sourceView !== 'raw') return;
+      if (!epubViewer || !currentRawIframe) return;
+      epubViewer.resizeIframeToContent(currentRawIframe);
+    },
+    { passive: true }
+  );
+}
+
+function parseTextToChapters(arrayBuffer) {
+  const text = decodeText(arrayBuffer);
+  const chapters = splitTextChapters(text) || splitTextBySize(text, 8000);
+  return (chapters || []).map((c, idx) => ({
+    title: String(c.title || `第${idx + 1}章`),
+    content: String(c.content || ''),
+  }));
+}
+
+async function ensureSourcePreparedForView() {
+  if (!sourceBook || !sourceArrayBuffer || !sourceKind || !sourceView) return;
+
+  if (sourceKind === 'text') {
+    if (!textChaptersCache) textChaptersCache = parseTextToChapters(sourceArrayBuffer);
+    sourceChapters = textChaptersCache;
+    return;
+  }
+
+  // epub
+  if (sourceView === 'raw') {
+    if (!epubViewer) {
+      const JSZip = await ensureJsZip();
+      epubViewer = await createEpubRawViewer(
+        sourceArrayBuffer,
+        sourceBook?.source_name || sourceBook?.title || 'book.epub',
+        JSZip
+      );
+      window.addEventListener('beforeunload', () => epubViewer?.dispose?.());
+    }
+    ensureThemeObserver();
+    ensureResizeHandler();
+    sourceChapters = epubViewer.spineItems.map((it) => ({ title: it.title, content: '' }));
+    return;
+  }
+
+  if (!epubTextChaptersCache) {
     const JSZip = await ensureJsZip();
-    const { chapters } = await parseEpubArrayBuffer(arrayBuffer, book?.source_name || book?.title || 'book.epub', JSZip);
-    return (chapters || []).map((c, idx) => ({
+    const { chapters } = await parseEpubArrayBuffer(
+      sourceArrayBuffer,
+      sourceBook?.source_name || sourceBook?.title || 'book.epub',
+      JSZip,
+      { keepEmpty: true }
+    );
+    epubTextChaptersCache = (chapters || []).map((c, idx) => ({
       title: String(c.title || `章节 ${idx + 1}`),
       content: String(c.content || ''),
     }));
   }
-
-  const isText = type.startsWith('text/') || name.endsWith('.txt') || name.endsWith('.text');
-  if (isText) {
-    const text = decodeText(arrayBuffer);
-    const chapters = splitTextChapters(text) || splitTextBySize(text, 8000);
-    return (chapters || []).map((c, idx) => ({
-      title: String(c.title || `第${idx + 1}章`),
-      content: String(c.content || ''),
-    }));
-  }
-
-  throw new Error('暂不支持在线阅读该源文件格式，请下载后查看');
+  sourceChapters = epubTextChaptersCache;
 }
 
 function bindHashNavigation() {
   window.addEventListener('hashchange', () => {
     const pos = getPosFromHash();
     if (!pos) return;
-    renderChapter(pos, false);
+    renderChapter(pos, false).catch(() => {});
   });
 
   if (dom.tocList) {
@@ -111,6 +262,17 @@ function getInitialPos() {
   return 1;
 }
 
+function getCurrentPos() {
+  const fromHash = getPosFromHash();
+  if (fromHash) return fromHash;
+
+  const id = String(state.chapterMeta?.chapterId || '');
+  const m = id.match(new RegExp(`^src-${sourceBookId}-(\\d+)$`));
+  if (m) return clampPos(Number(m[1]));
+
+  return 1;
+}
+
 function getPosFromHash() {
   const h = String(location.hash || '').replace(/^#/, '');
   if (!h) return null;
@@ -133,7 +295,38 @@ function renderTOC() {
     .join('');
 }
 
-function renderChapter(pos, replaceHash) {
+function buildSourceViewToggle() {
+  const wrap = document.createElement('div');
+  wrap.className = 'source-view-toggle';
+  wrap.innerHTML = `
+    <button type="button" class="source-view-btn ${sourceView === 'raw' ? 'active' : ''}" data-view="raw">源格式</button>
+    <button type="button" class="source-view-btn ${sourceView === 'text' ? 'active' : ''}" data-view="text">纯文本</button>
+  `;
+  wrap.addEventListener('click', (e) => {
+    const btn = e.target.closest?.('button[data-view]');
+    if (!btn) return;
+    setSourceView(btn.dataset.view).catch(() => {});
+  });
+  return wrap;
+}
+
+async function setSourceView(nextView) {
+  const v = normalizeSourceView(nextView);
+  if (!v || !sourceKind) return;
+  if (v === sourceView) return;
+
+  sourceView = v;
+  saveSourceView(sourceKind, sourceView);
+  updateUrlSourceView(sourceView);
+
+  await ensureSourcePreparedForView();
+  applySourceViewSideEffects();
+  renderTOC();
+  await renderChapter(getCurrentPos(), false);
+}
+
+async function renderChapter(pos, replaceHash) {
+  const seq = ++renderSeq;
   const idx = clampPos(pos) - 1;
   const ch = sourceChapters[idx];
   if (!ch) return;
@@ -146,13 +339,14 @@ function renderChapter(pos, replaceHash) {
 
   const bookIdNum = Number(sourceBookId);
   const chapterKey = `src-${sourceBookId}-${idx + 1}`;
+  const chapterTitle = String(ch.title || `章节 ${idx + 1}`);
   state.chapterMeta = {
     chapterId: chapterKey,
-    chapterTitle: ch.title || `章节 ${idx + 1}`,
+    chapterTitle,
     bookTitle: sourceBook?.title || '源文件',
     bookId: bookIdNum,
   };
-  state.chapterData = { content: ch.content || '', title: state.chapterMeta.chapterTitle };
+  state.chapterData = { content: '', title: state.chapterMeta.chapterTitle };
 
   document.title = `${esc(state.chapterMeta.chapterTitle)} - ${esc(state.chapterMeta.bookTitle)}`;
   const metaDesc = document.querySelector('meta[name="description"]');
@@ -174,9 +368,19 @@ function renderChapter(pos, replaceHash) {
   const el = dom.content;
   if (!el) return;
 
+  el.innerHTML = `<h2>${esc(state.chapterMeta.chapterTitle)} <span style="font-size:12px;color:var(--text-light)">（源文件）</span></h2>`;
+  el.appendChild(buildSourceViewToggle());
+
+  if (sourceKind === 'epub' && sourceView === 'raw' && showForcedScrollHint) {
+    const hint = document.createElement('div');
+    hint.className = 'source-raw-hint';
+    hint.textContent = '源格式暂不支持翻页，已切到滚动';
+    el.appendChild(hint);
+  }
+
+  currentRawIframe = null;
   const contentDiv = document.createElement('div');
   contentDiv.className = 'reader-content';
-  contentDiv.textContent = ch.content || '';
 
   const nav = document.createElement('div');
   nav.className = 'reader-nav';
@@ -188,7 +392,32 @@ function renderChapter(pos, replaceHash) {
     ${state.nav.nextUrl ? `<a href="${state.nav.nextUrl}">${esc(sourceChapters[idx + 1]?.title || '下一章')} →</a>` : '<span class="disabled">已经是最后一章</span>'}
   `;
 
-  el.innerHTML = `<h2>${esc(state.chapterMeta.chapterTitle)} <span style="font-size:12px;color:var(--text-light)">（源文件）</span></h2>`;
+  const isEpubRaw = sourceKind === 'epub' && sourceView === 'raw';
+  const isTextRaw = sourceKind === 'text' && sourceView === 'raw';
+
+  if (isTextRaw) contentDiv.classList.add('source-raw');
+
+  if (isEpubRaw) {
+    contentDiv.textContent = '渲染中...';
+    try {
+      const colors = getThemeColors();
+      const { iframe, plainText } = await epubViewer.renderSpine(idx, { colors });
+      if (seq !== renderSeq) return;
+      currentRawIframe = iframe;
+      contentDiv.innerHTML = '';
+      contentDiv.appendChild(iframe);
+      state.chapterData.content = String(plainText || '');
+    } catch (e) {
+      if (seq !== renderSeq) return;
+      contentDiv.innerHTML = `<div class="msg msg-error">${esc(e.message || '渲染失败')}</div>`;
+      state.chapterData.content = '';
+    }
+  } else {
+    const text = String(ch.content || '');
+    state.chapterData.content = text;
+    contentDiv.textContent = text;
+  }
+
   el.appendChild(contentDiv);
   el.appendChild(nav);
 
@@ -197,8 +426,9 @@ function renderChapter(pos, replaceHash) {
     exportCurrent();
   });
 
+  applyReadingMode();
   updateBottomNavButtons();
-  trackReadingStats(chapterKey, (ch.content || '').length);
+  trackReadingStats(chapterKey, (state.chapterData.content || '').length);
   updateBookmarkIcon();
 
   const hasSavedScroll = hasSavedScrollProgress(bookIdNum, chapterKey);
