@@ -2,6 +2,7 @@ import { api } from '../api.js';
 import { esc } from '../ui.js';
 import { setCategoryBooks } from './api.js';
 import { loadCategories } from './state.js';
+import { coverColor } from '../../shared/cover.js';
 
 let categoryId = null;
 let categoryName = '';
@@ -22,9 +23,23 @@ function normalizeBookStatus(status) {
   return s || 'normal';
 }
 
+function escAttr(s) {
+  return esc(s).replace(/"/g, '&quot;');
+}
+
+function updateHint() {
+  const hintEl = document.getElementById('category-books-hint');
+  if (!hintEl) return;
+  if (!booksCache.length) {
+    hintEl.textContent = '';
+    return;
+  }
+  hintEl.textContent = `已选 ${selectedBooks.size}/${booksCache.length}`;
+}
+
 async function loadBooksForOverlay() {
   const el = document.getElementById('category-books-list');
-  if (el) el.innerHTML = '<li style="color:var(--text-light)">加载中...</li>';
+  if (el) el.innerHTML = '<li class="category-books-empty">加载中...</li>';
 
   const res = await api('GET', '/api/books');
   const data = await res.json().catch(() => ({}));
@@ -40,6 +55,25 @@ async function loadBooksForOverlay() {
   selectedBooks = selected;
 }
 
+function buildStatusBadgeHtml(status) {
+  const s = normalizeBookStatus(status);
+  if (s === 'normal') return '';
+  if (s === 'unlisted') return '<div class="category-book-badge category-book-badge-unlisted">下架</div>';
+  if (s === 'deleted') return '<div class="category-book-badge category-book-badge-deleted">回收站</div>';
+  if (s === 'purging') return '<div class="category-book-badge category-book-badge-purging">清理中</div>';
+  return `<div class="category-book-badge">${esc(s)}</div>`;
+}
+
+function buildCoverHtml(book) {
+  if (book?.cover_key) {
+    return `<img class="category-book-cover-img" src="/api/covers/${Number(book.id)}" alt="${escAttr(book.title)}" loading="lazy">`;
+  }
+  const title = String(book?.title || '').trim();
+  const firstChar = title ? title[0] : '？';
+  const color = coverColor(title || String(book?.id || ''));
+  return `<div class="category-book-cover-placeholder" style="background:${esc(color)}">${esc(firstChar)}</div>`;
+}
+
 function renderBooksList() {
   const el = document.getElementById('category-books-list');
   if (!el) return;
@@ -53,14 +87,10 @@ function renderBooksList() {
       })
     : booksCache;
 
-  const hintEl = document.getElementById('category-books-hint');
-  if (hintEl) {
-    const sel = selectedBooks.size;
-    hintEl.textContent = booksCache.length ? `已选 ${sel}/${booksCache.length}` : '';
-  }
+  updateHint();
 
   if (!filtered.length) {
-    el.innerHTML = '<li style="color:var(--text-light)">暂无书籍</li>';
+    el.innerHTML = '<li class="category-books-empty">暂无书籍</li>';
     return;
   }
 
@@ -68,19 +98,23 @@ function renderBooksList() {
     .map((b) => {
       const id = Number(b.id);
       const checked = selectedBooks.has(id) ? 'checked' : '';
-      const status = normalizeBookStatus(b.status);
-      const statusText = status === 'normal' ? '' : status === 'unlisted' ? ' · 下架' : status === 'deleted' ? ' · 回收站' : ` · ${esc(status)}`;
+      const selected = selectedBooks.has(id) ? 'is-selected' : '';
+      const author = b.author ? esc(b.author) : '—';
+      const badge = buildStatusBadgeHtml(b.status);
       return `
         <li data-book-id="${id}">
-          <div class="item-info">
-            <label class="gh-select-row">
-              <input type="checkbox" class="category-book-select" data-book-id="${id}" ${checked}>
-              <div>
-                <div class="item-title">${esc(b.title)}</div>
-                <div class="item-meta">${b.author ? esc(b.author) : '—'}${statusText}</div>
-              </div>
-            </label>
-          </div>
+          <label class="category-book-card ${selected}">
+            <input type="checkbox" class="category-book-select" data-book-id="${id}" ${checked} aria-label="选择《${escAttr(b.title)}》">
+            <div class="category-book-cover">
+              ${buildCoverHtml(b)}
+              <div class="category-book-check">✓</div>
+              ${badge}
+            </div>
+            <div class="category-book-info">
+              <div class="category-book-title">${esc(b.title)}</div>
+              <div class="category-book-meta">${author}</div>
+            </div>
+          </label>
         </li>
       `;
     })
@@ -129,7 +163,8 @@ export function initCategoryBooksOverlay() {
     if (!Number.isFinite(bookId) || bookId <= 0) return;
     if (cb.checked) selectedBooks.add(bookId);
     else selectedBooks.delete(bookId);
-    renderBooksList();
+    cb.closest?.('.category-book-card')?.classList?.toggle('is-selected', !!cb.checked);
+    updateHint();
   });
 }
 
@@ -153,7 +188,6 @@ export async function openCategoryBooksOverlay(category) {
     renderBooksList();
   } catch (e) {
     const el = document.getElementById('category-books-list');
-    if (el) el.innerHTML = `<li style="color:var(--text-light)">加载失败：${esc(e.message || 'error')}</li>`;
+    if (el) el.innerHTML = `<li class="category-books-empty">加载失败：${esc(e.message || 'error')}</li>`;
   }
 }
-
