@@ -35,7 +35,7 @@ export function buildBookCardsHtml(books) {
         .join('');
 
       if (b.cover_key) {
-        return `<a class="book-card-cover" href="/book?id=${b.id}">
+        return `<a class="book-card-cover" data-book-id="${b.id}" href="/book?id=${b.id}">
           <img class="cover-img" src="/api/covers/${b.id}" alt="${esc(b.title)}" loading="lazy">
           <div class="card-body">
             <h3>${esc(b.title)}</h3>
@@ -47,7 +47,7 @@ export function buildBookCardsHtml(books) {
 
       const color = coverColor(b.title);
       const firstChar = (b.title || '?')[0];
-      return `<a class="book-card-cover" href="/book?id=${b.id}">
+      return `<a class="book-card-cover" data-book-id="${b.id}" href="/book?id=${b.id}">
         <div class="cover-placeholder" style="background:${color}">${esc(firstChar)}</div>
         <div class="card-body">
           <h3>${esc(b.title)}</h3>
@@ -58,4 +58,3 @@ export function buildBookCardsHtml(books) {
     })
     .join('');
 }
-

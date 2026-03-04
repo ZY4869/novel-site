@@ -4,9 +4,11 @@ import { initThemeToggle } from '../shared/theme.js';
 import { loadBooks } from './index/books.js';
 import { bindSearch } from './index/search.js';
 import { loadSiteSettings } from './index/siteSettings.js';
+import { initShelfCategoryQuickMove } from './index/shelfCategoryQuickMove.js';
 
 initThemeToggle(qs('.theme-toggle'));
 registerServiceWorker();
 bindSearch();
 loadBooks();
 loadSiteSettings();
+initShelfCategoryQuickMove();
