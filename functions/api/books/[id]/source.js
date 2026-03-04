@@ -9,12 +9,21 @@ function contentDispositionAttachment(filename) {
   return `attachment; filename="${safe}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
+function shouldTrackSourceRead(request) {
+  const mode = String(request?.headers?.get('Sec-Fetch-Mode') || '').toLowerCase();
+  // 导航到下载地址（新标签/地址栏）通常是 navigate，这类不算“阅读”
+  if (mode === 'navigate') return false;
+  return true;
+}
+
 export async function onRequestGet(context) {
-  const { env, params } = context;
+  const { request, env, params } = context;
   const id = params.id;
 
   if (!validateId(id)) return new Response('Not found', { status: 404 });
   await ensureSchemaReady(env);
+
+  const trackAsRead = shouldTrackSourceRead(request);
 
   const book = await env.DB.prepare(
     'SELECT source_key, source_name, source_type FROM books WHERE id = ?'
@@ -48,6 +57,7 @@ export async function onRequestGet(context) {
       headers.set('X-Content-Type-Options', 'nosniff');
       headers.set('Cache-Control', 'private, max-age=0, no-store');
 
+      if (trackAsRead) context.waitUntil(trackBookSourceView(env, id));
       return new Response(upstream.body, { headers });
     } catch {
       return new Response('Not found', { status: 404 });
@@ -66,5 +76,22 @@ export async function onRequestGet(context) {
   headers.set('X-Content-Type-Options', 'nosniff');
   headers.set('Cache-Control', 'private, max-age=0, no-store');
 
+  if (trackAsRead) context.waitUntil(trackBookSourceView(env, id));
   return new Response(obj.body, { headers });
+}
+
+async function trackBookSourceView(env, bookId) {
+  try {
+    const id = Number(bookId);
+    if (!Number.isFinite(id) || id <= 0) return;
+
+    const today = new Date().toISOString().slice(0, 10);
+    await env.DB.prepare(
+      'INSERT INTO book_stats (book_id, date, views) VALUES (?, ?, 1) ON CONFLICT(book_id, date) DO UPDATE SET views = views + 1'
+    )
+      .bind(id, today)
+      .run();
+  } catch (e) {
+    console.error('Track book source view error:', e);
+  }
 }

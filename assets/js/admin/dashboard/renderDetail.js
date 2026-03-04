@@ -45,8 +45,9 @@ export function renderDetail(data) {
     const progress = data.progress || null;
     const title = esc(book.title || '未命名');
     const author = book.author ? esc(book.author) : '';
-    const ch = toInt(book.chapter_count || 0, 0);
-    const words = toInt(book.total_words || 0, 0);
+    const importedCh = toInt(book.chapter_count || 0, 0);
+    const ch = importedCh > 0 ? importedCh : toInt(book.source_chapter_count || 0, 0);
+    const words = importedCh > 0 ? toInt(book.total_words || 0, 0) : toInt(book.source_word_count || 0, 0);
     const pct = toInt(progress?.progressPct || 0, 0);
     const subtitle = esc(progress?.subtitle || (author ? `作者：${author}` : ''));
     const href = String(progress?.href || '').trim();
@@ -147,4 +148,3 @@ export function renderDetail(data) {
   const bars = body.querySelector('[data-dash-bars="1"]');
   if (bars && !prefersReducedMotion()) requestAnimationFrame(() => bars.classList.add('ready'));
 }
-

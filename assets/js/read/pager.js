@@ -1,4 +1,5 @@
 import { state, dom } from './state.js';
+import { maybeReportAdminProgress } from './adminProgress.js';
 
 export function initPager() {
   if (dom.pagerTapLeft) dom.pagerTapLeft.addEventListener('click', (e) => { e.stopPropagation(); pagerPrev(); });
@@ -173,5 +174,6 @@ function savePagerProgress() {
     };
     localStorage.setItem(`reading_${m.bookId}`, JSON.stringify(progress));
   } catch {}
-}
 
+  maybeReportAdminProgress(m, pct);
+}

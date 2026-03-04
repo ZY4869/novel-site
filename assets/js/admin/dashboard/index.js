@@ -162,8 +162,17 @@ export async function loadDashboardPanel() {
     (async () => {
       const books = await fetchBooks();
       state.books = books;
-      const totalChapters = books.reduce((s, b) => s + toInt(b.chapter_count, 0), 0);
-      const totalWords = books.reduce((s, b) => s + toInt(b.total_words, 0), 0);
+      const totalChapters = books.reduce((s, b) => {
+        const imported = toInt(b.chapter_count, 0);
+        const source = toInt(b.source_chapter_count, 0);
+        return s + (imported > 0 ? imported : source);
+      }, 0);
+      const totalWords = books.reduce((s, b) => {
+        const importedCh = toInt(b.chapter_count, 0);
+        const importedWords = toInt(b.total_words, 0);
+        const sourceWords = toInt(b.source_word_count, 0);
+        return s + (importedCh > 0 ? importedWords : sourceWords);
+      }, 0);
       setText('stat-books', fmtCount(books.length));
       setText('stat-chapters', fmtCount(totalChapters));
       setText('stat-words', fmtWan(totalWords));

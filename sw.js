@@ -50,6 +50,7 @@ const APP_SHELL = [
   '/assets/js/read/pager.js',
   '/assets/js/read/bottomBar.js',
   '/assets/js/read/progress.js',
+  '/assets/js/read/adminProgress.js',
   '/assets/js/read/shortcuts.js',
   '/assets/js/read/siteSettings.js',
   '/assets/js/read/fonts.js',
