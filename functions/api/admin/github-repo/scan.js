@@ -25,6 +25,34 @@ function isCbzFile(name) {
   return n.endsWith('.cbz') || n.endsWith('.zip');
 }
 
+async function fetchGitHubTreeRecursive(env, { owner, repo, branch }) {
+  const safeOwner = String(owner || '').trim();
+  const safeRepo = String(repo || '').trim();
+  const safeBranch = String(branch || '').trim();
+  if (!safeOwner || !safeRepo || !safeBranch) throw new Error('GitHub 仓库配置不完整');
+
+  const refSeg = encodeURIComponent(safeBranch);
+  try {
+    return await githubApiJson(env, `/repos/${safeOwner}/${safeRepo}/git/trees/${refSeg}?recursive=1`);
+  } catch (e) {
+    // fallback: resolve commit -> tree sha
+    try {
+      const commit = await githubApiJson(env, `/repos/${safeOwner}/${safeRepo}/commits/${refSeg}`);
+      const treeSha = String(commit?.commit?.tree?.sha || '').trim();
+      if (!treeSha) throw e;
+      return await githubApiJson(env, `/repos/${safeOwner}/${safeRepo}/git/trees/${encodeURIComponent(treeSha)}?recursive=1`);
+    } catch {
+      throw e;
+    }
+  }
+}
+
+function lastPathSeg(p) {
+  const s = String(p || '');
+  const idx = s.lastIndexOf('/');
+  return idx >= 0 ? s.slice(idx + 1) : s;
+}
+
 async function saveScanCache(env, { type, configHash, base, items }) {
   try {
     const itemsJson = JSON.stringify(Array.isArray(items) ? items : []);
@@ -83,6 +111,39 @@ export async function onRequestGet(context) {
     const repoKey = config.id ? `id${config.id}` : 'legacy';
     const variant = type === 'novels' ? (dirParam === null ? 'flat' : 'dir') : 'base';
     const configHash = await sha256Hash(`${repoKey}:${config.owner}/${config.repo}@${config.branch}:${variant}:${cleanBase}`);
+
+    // novels flat scan: recursive tree, so "全部仓库" 模式也能识别多级目录预分类
+    if (type === 'novels' && dirParam === null) {
+      const tree = await fetchGitHubTreeRecursive(env, config);
+      if (tree?.truncated) throw new Error('仓库树过大，建议切换到单仓库目录模式逐级扫描');
+      if (!Array.isArray(tree?.tree)) {
+        return Response.json({ error: 'GitHub 返回不是目录树' }, { status: 400 });
+      }
+
+      const prefix = cleanBase ? String(cleanBase).replace(/\/+$/, '') + '/' : '';
+      const items = tree.tree
+        .filter((x) => {
+          if (!x || x.type !== 'blob') return false;
+          const p = String(x.path || '').trim();
+          if (!p) return false;
+          if (prefix && !p.startsWith(prefix)) return false;
+          return isNovelFile(p);
+        })
+        .map((x) => ({
+          kind: 'file',
+          repo_id: config.id ?? null,
+          name: lastPathSeg(x.path),
+          path: x.path,
+          size: Number(x.size || 0) || 0,
+          sha: x.sha || '',
+        }))
+        .sort((a, b) =>
+          String(a.path).localeCompare(String(b.path), undefined, { numeric: true, sensitivity: 'base' })
+        );
+
+      context.waitUntil(saveScanCache(env, { type, configHash, base: cleanBase, items }));
+      return Response.json({ success: true, type, repo_id: config.id ?? null, base: cleanBase, items });
+    }
     const apiPath = encodePathSegments(cleanBase);
 
     const urlPath = apiPath

@@ -68,6 +68,27 @@ export async function bindGitHubComicDir(payload) {
   return data;
 }
 
+export async function resolveGitHubRepoCategories(items, { autoCategory = true } = {}) {
+  const payload = {
+    type: 'novels',
+    auto_category: autoCategory,
+    items: Array.isArray(items) ? items : [],
+  };
+  const res = await api('POST', '/api/admin/github-repo/resolve-categories', payload);
+  const data = await readJson(res);
+  if (!res.ok) throw new Error(data.error || '解析分类失败');
+  return data;
+}
+
+export async function backfillGitHubRepoCategories({ repo_id, after_id = 0, limit = 200, dry_run = false } = {}) {
+  const payload = { after_id, limit, dry_run };
+  if (repo_id !== undefined) payload.repo_id = repo_id;
+  const res = await api('POST', '/api/admin/github-repo/backfill-categories', payload);
+  const data = await readJson(res);
+  if (!res.ok) throw new Error(data.error || '回填失败');
+  return data;
+}
+
 export async function fetchGitHubRawBlob(path, { repoId = null } = {}) {
   const params = new URLSearchParams();
   params.set('path', String(path || ''));

@@ -1,9 +1,15 @@
 import { filenameToTitle, showMsg } from '../ui.js';
-import { bindGitHubNovel } from './api.js';
+import { bindGitHubNovel, resolveGitHubRepoCategories } from './api.js';
+import { loadCategories } from '../categories/state.js';
 import { syncImportGitHubNovel } from './syncNovel.js';
 import { isBusy, setBusy } from './state.js';
 import { tryComputeAndSaveSourceMeta } from './novelMeta.js';
 let abortRequested = false;
+
+function isAutoCategoryEnabled() {
+  const el = document.getElementById('gh-repo-auto-category');
+  return el ? !!el.checked : true;
+}
 
 export function initGitHubNovelBatchUi({ onNovelDone, getCategoryIds } = {}) {
   document.getElementById('gh-repo-novels-select-all')?.addEventListener('change', (e) => {
@@ -95,6 +101,8 @@ async function batchBindSelectedNovels({ onNovelDone, getCategoryIds } = {}) {
   showCancelBtn(true);
   setBusy(true);
 
+  const auto_category = isAutoCategoryEnabled();
+
   let created = 0;
   let existed = 0;
   let failed = 0;
@@ -110,7 +118,7 @@ async function batchBindSelectedNovels({ onNovelDone, getCategoryIds } = {}) {
       try {
         const category_ids = typeof getCategoryIds === 'function' ? getCategoryIds() : [];
         const { repoId } = getLiInfo(selected[i]);
-        const data = await bindGitHubNovel({ repo_id: repoId || undefined, path, title, name, size, category_ids });
+        const data = await bindGitHubNovel({ repo_id: repoId || undefined, path, title, name, size, category_ids, auto_category });
         const bookId = data?.book?.id;
         const already = !!data?.alreadyExists;
         if (already) existed++;
@@ -135,6 +143,7 @@ async function batchBindSelectedNovels({ onNovelDone, getCategoryIds } = {}) {
     showCancelBtn(false);
     setBusy(false);
     refreshGitHubNovelBatchUi();
+    if (auto_category) await loadCategories().catch(() => {});
   }
 
   const stopped = abortRequested ? '（已停止）' : '';
@@ -151,16 +160,40 @@ async function batchSyncSelectedNovels({ onNovelDone, getCategoryIds } = {}) {
   );
   if (!ok) return;
   const tpl = getBatchImportTemplate();
-  const category_ids = typeof getCategoryIds === 'function' ? getCategoryIds() : [];
+  const manualCategoryIds = typeof getCategoryIds === 'function' ? getCategoryIds() : [];
 
   abortRequested = false;
   showCancelBtn(true);
   setBusy(true);
 
+  const auto_category = isAutoCategoryEnabled();
+
   let imported = 0;
   let failed = 0;
+  const autoCategoryByKey = new Map();
 
   try {
+    if (auto_category) {
+      try {
+        const resolveItems = selected.map((li) => {
+          const { repoId, path } = getLiInfo(li);
+          return { repo_id: repoId || null, path };
+        });
+
+        for (let i = 0; i < resolveItems.length; i += 200) {
+          const chunk = resolveItems.slice(i, i + 200);
+          const resolved = await resolveGitHubRepoCategories(chunk, { autoCategory: true });
+          for (const r of resolved?.results || []) {
+            const key = `${r?.repo_id || ''}:${r?.path || ''}`;
+            const ids = Array.isArray(r?.category_ids) ? r.category_ids : [];
+            autoCategoryByKey.set(key, ids);
+          }
+        }
+
+        await loadCategories().catch(() => {});
+      } catch {}
+    }
+
     for (let i = 0; i < selected.length; i++) {
       if (abortRequested) break;
 
@@ -169,6 +202,10 @@ async function batchSyncSelectedNovels({ onNovelDone, getCategoryIds } = {}) {
       const title = filenameToTitle(name);
 
       try {
+        const key = `${repoId || ''}:${path || ''}`;
+        const autoIds = auto_category ? (autoCategoryByKey.get(key) || []) : [];
+        const mergedCategoryIds = Array.from(new Set([...(manualCategoryIds || []), ...(autoIds || [])])).slice(0, 20);
+
         await syncImportGitHubNovel(
           {
             repoId,
@@ -179,7 +216,7 @@ async function batchSyncSelectedNovels({ onNovelDone, getCategoryIds } = {}) {
               title,
               author: tpl.author,
               description: tpl.description,
-              category_ids,
+              category_ids: mergedCategoryIds,
             },
           },
           {

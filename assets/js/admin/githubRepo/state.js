@@ -11,6 +11,7 @@ export function setBusy(v) {
   document
     .querySelectorAll(
       '#gh-repo-scan-novels-btn,#gh-repo-scan-comics-btn,#save-gh-repo-config-btn,#gh-repo-clear-token-btn,' +
+        '#gh-repo-auto-category,#gh-repo-backfill-categories-btn,' +
         '#gh-repo-novels-select-all,#gh-repo-novels-batch-bind-btn,#gh-repo-novels-batch-sync-btn,' +
         '#gh-repo-add-repo-btn,#gh-repo-import-legacy-btn,#gh-repo-edit-save-btn,' +
         '#gh-repo-novels-repo-select,#gh-repo-comics-repo-select,#gh-repo-novels-up-btn,#gh-repo-novels-root-btn'

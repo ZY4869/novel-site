@@ -2,6 +2,7 @@
 import { checkAdmin, requireSuperAdmin, parseJsonBody, validateId } from '../../_utils.js';
 import { githubApiJson, sanitizeRepoPath } from '../../utils/githubRepoContent.js';
 import { getGitHubRepoGlobalEnabled, resolveGitHubRepoConfig } from '../../utils/githubRepos.js';
+import { ensureCategoriesByNameWithStats, inferCategoryNamesFromNovelPath, inferRepoKey } from '../../utils/githubAutoCategories.js';
 
 const MAX_CATEGORY_IDS = 20;
 
@@ -46,6 +47,7 @@ export async function onRequestPost(context) {
   const repoIdRaw = body.repo_id ?? body.repoId ?? null;
   const clientName = typeof body.name === 'string' ? body.name.trim() : '';
   const clientSize = Number(body.size || 0);
+  const autoCategory = !(body.auto_category === false || body.autoCategory === false);
 
   // optional: categories
   let categoryIds = [];
@@ -83,6 +85,37 @@ export async function onRequestPost(context) {
     const sourceKey = config.id ? `gh:${config.id}:${cleanPath}` : `gh:${cleanPath}`;
     const legacySourceKey = `gh:${cleanPath}`;
 
+    // auto categories by repo path (optional, merge-only)
+    let mergedCategoryIds = Array.isArray(categoryIds) ? categoryIds : [];
+    if (autoCategory) {
+      try {
+        const repoKeyText = inferRepoKey({
+          owner: config.owner,
+          repo: config.repo,
+          fallback: config.id ? `repo#${config.id}` : 'legacy',
+        });
+        const autoNames = inferCategoryNamesFromNovelPath({
+          repoKey: repoKeyText,
+          novelsPath: config.novelsPath,
+          cleanPath,
+          max: MAX_CATEGORY_IDS,
+        });
+        if (autoNames.length > 0) {
+          const { map, ensuredNames } = await ensureCategoriesByNameWithStats(env, {
+            names: autoNames,
+            createdBy: auth.userId,
+            max: 200,
+          });
+          const autoIds = ensuredNames
+            .map((n) => map.get(n))
+            .filter((x) => Number.isFinite(x) && x > 0);
+          mergedCategoryIds = Array.from(new Set([...(mergedCategoryIds || []), ...autoIds])).slice(0, MAX_CATEGORY_IDS);
+        }
+      } catch (e) {
+        console.error('bind-book auto category error:', e);
+      }
+    }
+
     let existing = await env.DB.prepare('SELECT id, title, source_name, source_size FROM books WHERE source_key = ? LIMIT 1')
       .bind(sourceKey)
       .first();
@@ -96,6 +129,36 @@ export async function onRequestPost(context) {
       }
     }
     if (existing?.id) {
+      // enhance: allow re-bind to attach categories (merge, no deletion)
+      if (mergedCategoryIds.length > 0) {
+        try {
+          const placeholders = mergedCategoryIds.map(() => '?').join(',');
+          const { results: validCats } = await env.DB.prepare(
+            `SELECT id FROM book_categories WHERE id IN (${placeholders})`
+          ).bind(...mergedCategoryIds).all();
+          const validSet = new Set((validCats || []).map((c) => c.id));
+          const validIds = mergedCategoryIds.filter((id) => validSet.has(id));
+          if (validIds.length > 0) {
+            await env.DB.batch(
+              validIds.map((cid) =>
+                env.DB.prepare('INSERT OR IGNORE INTO book_category_books (category_id, book_id) VALUES (?, ?)').bind(cid, existing.id)
+              )
+            );
+          }
+        } catch (e) {
+          console.error('attach categories on bind-book existing error:', e);
+        }
+      }
+
+      if (autoCategory) {
+        console.log('bind-book auto categories', {
+          repoId: config.id ?? null,
+          path: cleanPath,
+          count: mergedCategoryIds.length,
+          alreadyExists: true,
+        });
+      }
+
       return Response.json({
         success: true,
         alreadyExists: true,
@@ -143,14 +206,14 @@ export async function onRequestPost(context) {
 
     const bookId = result.meta.last_row_id;
 
-    if (categoryIds.length > 0 && bookId) {
+    if (mergedCategoryIds.length > 0 && bookId) {
       try {
-        const placeholders = categoryIds.map(() => '?').join(',');
+        const placeholders = mergedCategoryIds.map(() => '?').join(',');
         const { results: validCats } = await env.DB.prepare(
           `SELECT id FROM book_categories WHERE id IN (${placeholders})`
-        ).bind(...categoryIds).all();
+        ).bind(...mergedCategoryIds).all();
         const validSet = new Set((validCats || []).map((c) => c.id));
-        const validIds = categoryIds.filter((id) => validSet.has(id));
+        const validIds = mergedCategoryIds.filter((id) => validSet.has(id));
         if (validIds.length > 0) {
           await env.DB.batch(
             validIds.map((cid) =>
@@ -161,6 +224,15 @@ export async function onRequestPost(context) {
       } catch (e) {
         console.error('attach categories on bind-book error:', e);
       }
+    }
+
+    if (autoCategory) {
+      console.log('bind-book auto categories', {
+        repoId: config.id ?? null,
+        path: cleanPath,
+        count: mergedCategoryIds.length,
+        alreadyExists: false,
+      });
     }
 
     return Response.json({
