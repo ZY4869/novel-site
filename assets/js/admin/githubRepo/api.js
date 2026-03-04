@@ -22,22 +22,33 @@ export async function saveGitHubRepoSettings(payload) {
   return data;
 }
 
-export async function scanGitHubRepo(type) {
-  const res = await api('GET', `/api/admin/github-repo/scan?type=${encodeURIComponent(type)}`);
+export async function scanGitHubRepo(type, { repoId = null, dir = undefined } = {}) {
+  const params = new URLSearchParams();
+  params.set('type', String(type || ''));
+  if (repoId) params.set('repo_id', String(repoId));
+  if (dir !== undefined) params.set('dir', String(dir ?? ''));
+  const res = await api('GET', `/api/admin/github-repo/scan?${params.toString()}`);
   const data = await readJson(res);
   if (!res.ok) throw new Error(data.error || '扫描失败');
   return data;
 }
 
-export async function fetchGitHubRepoScanCache(type) {
-  const res = await api('GET', `/api/admin/github-repo/cache?type=${encodeURIComponent(type)}`);
+export async function fetchGitHubRepoScanCache(type, { repoId = null, dir = undefined } = {}) {
+  const params = new URLSearchParams();
+  params.set('type', String(type || ''));
+  if (repoId) params.set('repo_id', String(repoId));
+  if (dir !== undefined) params.set('dir', String(dir ?? ''));
+  const res = await api('GET', `/api/admin/github-repo/cache?${params.toString()}`);
   const data = await readJson(res);
   if (!res.ok) throw new Error(data.error || '读取缓存失败');
   return data;
 }
 
-export async function listGitHubComicPages(dir) {
-  const res = await api('GET', `/api/admin/github-repo/comic-pages?dir=${encodeURIComponent(dir)}`);
+export async function listGitHubComicPages(dir, { repoId = null } = {}) {
+  const params = new URLSearchParams();
+  params.set('dir', String(dir || ''));
+  if (repoId) params.set('repo_id', String(repoId));
+  const res = await api('GET', `/api/admin/github-repo/comic-pages?${params.toString()}`);
   const data = await readJson(res);
   if (!res.ok) throw new Error(data.error || '读取页列表失败');
   return data;
@@ -57,8 +68,11 @@ export async function bindGitHubComicDir(payload) {
   return data;
 }
 
-export async function fetchGitHubRawBlob(path) {
-  const res = await fetch(`/api/admin/github-repo/raw?path=${encodeURIComponent(path)}`, {
+export async function fetchGitHubRawBlob(path, { repoId = null } = {}) {
+  const params = new URLSearchParams();
+  params.set('path', String(path || ''));
+  if (repoId) params.set('repo_id', String(repoId));
+  const res = await fetch(`/api/admin/github-repo/raw?${params.toString()}`, {
     method: 'GET',
     credentials: 'same-origin',
     headers: authHeaders(),

@@ -145,6 +145,23 @@ const SCHEMA_STATEMENTS = [
   'CREATE INDEX IF NOT EXISTS idx_comic_reading_progress_user_updated ON comic_reading_progress(user_id, updated_at)',
 
   // github repo scan cache (admin)
+  // github repos (multi)
+  `
+    CREATE TABLE IF NOT EXISTS github_repos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      owner TEXT NOT NULL,
+      repo TEXT NOT NULL,
+      branch TEXT NOT NULL DEFAULT 'main',
+      novels_path TEXT NOT NULL DEFAULT 'novels/',
+      comics_path TEXT NOT NULL DEFAULT 'comics/',
+      enabled INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `,
+  'CREATE INDEX IF NOT EXISTS idx_github_repos_enabled ON github_repos(enabled, id)',
+
   `
     CREATE TABLE IF NOT EXISTS github_repo_scan_cache (
       type TEXT NOT NULL,

@@ -1,6 +1,7 @@
 // POST /api/admin/github-repo/bind-comic-dir — 直连绑定 GitHub 图片目录为漫画（仅超管）
 import { checkAdmin, requireSuperAdmin, parseJsonBody } from '../../_utils.js';
-import { getRepoConfig, githubApiJson, sanitizeRepoPath } from '../../utils/githubRepoContent.js';
+import { githubApiJson, sanitizeRepoPath } from '../../utils/githubRepoContent.js';
+import { getGitHubRepoGlobalEnabled, resolveGitHubRepoConfig } from '../../utils/githubRepos.js';
 
 function encodePathSegments(path) {
   return String(path || '')
@@ -10,7 +11,6 @@ function encodePathSegments(path) {
 }
 
 function ensureConfigReady(config) {
-  if (!config?.enabled) throw new Error('GitHub 仓库内容未启用');
   if (!config.owner || !config.repo || !config.branch) throw new Error('GitHub 仓库配置不完整');
   if (!config.comicsPath) throw new Error('GitHub 漫画目录配置不完整');
 }
@@ -49,13 +49,23 @@ export async function onRequestPost(context) {
   const title = String(body.title || '').trim().slice(0, 200);
   const description = String(body.description || '').trim().slice(0, 2000);
   const dir = String(body.dir || '').trim();
+  const repoIdRaw = body.repo_id ?? body.repoId ?? null;
   if (!title) return Response.json({ error: '请输入标题' }, { status: 400 });
   if (!dir) return Response.json({ error: 'Missing dir' }, { status: 400 });
 
   let comicId = null;
 
   try {
-    const config = await getRepoConfig(env);
+    const enabled = await getGitHubRepoGlobalEnabled(env);
+    if (!enabled) throw new Error('GitHub 仓库内容未启用');
+
+    if (repoIdRaw !== null && repoIdRaw !== undefined && !/^\d+$/.test(String(repoIdRaw))) {
+      return Response.json({ error: 'Invalid repo_id' }, { status: 400 });
+    }
+    const repoId = repoIdRaw ? Number(repoIdRaw) : null;
+
+    const config = await resolveGitHubRepoConfig(env, { repoId });
+    if (!config) throw new Error('未找到可用的 GitHub 仓库配置');
     ensureConfigReady(config);
 
     const cleanDir = sanitizeRepoPath(dir, [config.comicsPath]);
@@ -99,7 +109,7 @@ export async function onRequestPost(context) {
           (comic_id, page_index, image_key, size_bytes, content_type)
           VALUES (?, ?, ?, ?, ?)
         `
-      ).bind(comicId, idx + 1, `gh:${img.path}`, img.size, img.contentType)
+      ).bind(comicId, idx + 1, config.id ? `gh:${config.id}:${img.path}` : `gh:${img.path}`, img.size, img.contentType)
     );
 
     for (const part of chunk(stmts, 200)) {

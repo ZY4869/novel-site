@@ -22,12 +22,12 @@ function toFile(blob, name) {
   }
 }
 
-export async function syncImportGitHubNovel({ path, name, target }, { onStatus, onProgress } = {}) {
+export async function syncImportGitHubNovel({ repoId = null, path, name, target }, { onStatus, onProgress } = {}) {
   const kind = detectKindByName(name);
   if (kind !== 'txt' && kind !== 'epub') throw new Error('仅支持 TXT/EPUB 同步导入');
 
   if (typeof onStatus === 'function') onStatus('下载 GitHub 文件中...');
-  const blob = await fetchGitHubRawBlob(path);
+  const blob = await fetchGitHubRawBlob(path, { repoId });
   const file = toFile(blob, name);
 
   if (typeof onStatus === 'function') onStatus('解析文件中...');

@@ -1,9 +1,9 @@
-// GET /api/admin/github-repo/cache?type=novels|comics — 读取 GitHub 扫描缓存（不触发扫描，仅超管）
+// GET /api/admin/github-repo/cache?type=novels|comics&repo_id=&dir= — 读取 GitHub 扫描缓存（不触发扫描，仅超管）
 import { checkAdmin, requireSuperAdmin, sha256Hash } from '../../_utils.js';
-import { getRepoConfig, sanitizeRepoPath } from '../../utils/githubRepoContent.js';
+import { sanitizeRepoPath } from '../../utils/githubRepoContent.js';
+import { getGitHubRepoGlobalEnabled, resolveGitHubRepoConfig } from '../../utils/githubRepos.js';
 
 function ensureConfigReady(config) {
-  if (!config?.enabled) throw new Error('GitHub 仓库内容未启用');
   if (!config.owner || !config.repo || !config.branch) throw new Error('GitHub 仓库配置不完整');
   if (!config.novelsPath || !config.comicsPath) throw new Error('GitHub 目录配置不完整');
 }
@@ -22,12 +22,30 @@ export async function onRequestGet(context) {
   }
 
   try {
-    const config = await getRepoConfig(env);
+    const enabled = await getGitHubRepoGlobalEnabled(env);
+    if (!enabled) throw new Error('GitHub 仓库内容未启用');
+
+    const repoIdRaw = url.searchParams.get('repo_id');
+    if (repoIdRaw !== null && !/^\d+$/.test(repoIdRaw)) {
+      return Response.json({ error: 'Invalid repo_id' }, { status: 400 });
+    }
+    const repoId = repoIdRaw ? Number(repoIdRaw) : null;
+
+    const config = await resolveGitHubRepoConfig(env, { repoId });
+    if (!config) throw new Error('未找到可用的 GitHub 仓库配置');
     ensureConfigReady(config);
 
     const base = type === 'novels' ? config.novelsPath : config.comicsPath;
-    const cleanBase = sanitizeRepoPath(base, [base]);
-    const configHash = await sha256Hash(`${config.owner}/${config.repo}@${config.branch}:${cleanBase}`);
+    const dirParam = type === 'novels' ? url.searchParams.get('dir') : null;
+    if (type !== 'novels' && url.searchParams.has('dir')) {
+      return Response.json({ error: 'dir only supported for novels' }, { status: 400 });
+    }
+    const baseOrDirInput = dirParam === null ? base : (dirParam || base);
+    const cleanBase = sanitizeRepoPath(baseOrDirInput, [base]);
+
+    const repoKey = config.id ? `id${config.id}` : 'legacy';
+    const variant = type === 'novels' ? (dirParam === null ? 'flat' : 'dir') : 'base';
+    const configHash = await sha256Hash(`${repoKey}:${config.owner}/${config.repo}@${config.branch}:${variant}:${cleanBase}`);
 
     const row = await env.DB.prepare(
       'SELECT base, items_json, updated_at FROM github_repo_scan_cache WHERE type = ? AND config_hash = ?'
@@ -39,6 +57,7 @@ export async function onRequestGet(context) {
       return Response.json({
         success: true,
         type,
+        repo_id: config.id ?? null,
         cached: false,
         updatedAt: null,
         base: cleanBase,
@@ -55,6 +74,7 @@ export async function onRequestGet(context) {
     return Response.json({
       success: true,
       type,
+      repo_id: config.id ?? null,
       cached: true,
       updatedAt: row.updated_at || null,
       base: row.base || cleanBase,
@@ -64,4 +84,3 @@ export async function onRequestGet(context) {
     return Response.json({ error: e.message || 'Load cache failed' }, { status: 400 });
   }
 }
-

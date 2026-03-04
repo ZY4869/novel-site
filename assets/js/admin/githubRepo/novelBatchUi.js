@@ -48,7 +48,7 @@ export function refreshGitHubNovelBatchUi() {
 }
 
 function getAllNovelLis() {
-  return Array.from(document.querySelectorAll('#gh-repo-novels-list li[data-path]') || []);
+  return Array.from(document.querySelectorAll('#gh-repo-novels-list li[data-kind=\"file\"][data-path]') || []);
 }
 
 function getSelectedNovelLis() {
@@ -79,7 +79,9 @@ function getLiInfo(li) {
   const path = String(li?.dataset?.path || '').trim();
   const name = String(li?.dataset?.name || '').trim();
   const size = Number(li?.dataset?.size || 0) || 0;
-  return { path, name, size };
+  const repoIdRaw = String(li?.dataset?.repoId || '').trim();
+  const repoId = /^\d+$/.test(repoIdRaw) ? Number(repoIdRaw) : null;
+  return { repoId, path, name, size };
 }
 
 async function batchBindSelectedNovels({ onNovelDone, getCategoryIds } = {}) {
@@ -107,7 +109,8 @@ async function batchBindSelectedNovels({ onNovelDone, getCategoryIds } = {}) {
 
       try {
         const category_ids = typeof getCategoryIds === 'function' ? getCategoryIds() : [];
-        const data = await bindGitHubNovel({ path, title, name, size, category_ids });
+        const { repoId } = getLiInfo(selected[i]);
+        const data = await bindGitHubNovel({ repo_id: repoId || undefined, path, title, name, size, category_ids });
         const bookId = data?.book?.id;
         const already = !!data?.alreadyExists;
         if (already) existed++;
@@ -117,6 +120,7 @@ async function batchBindSelectedNovels({ onNovelDone, getCategoryIds } = {}) {
           showMsg('gh-repo-novels-msg', `统计章数/字数 ${i + 1}/${selected.length}：${title}`, '');
           await tryComputeAndSaveSourceMeta({
             bookId,
+            repoId,
             path,
             name,
             sizeBytes: size,
@@ -161,11 +165,13 @@ async function batchSyncSelectedNovels({ onNovelDone, getCategoryIds } = {}) {
       if (abortRequested) break;
 
       const { path, name } = getLiInfo(selected[i]);
+      const { repoId } = getLiInfo(selected[i]);
       const title = filenameToTitle(name);
 
       try {
         await syncImportGitHubNovel(
           {
+            repoId,
             path,
             name,
             target: {

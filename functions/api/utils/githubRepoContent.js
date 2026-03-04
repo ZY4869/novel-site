@@ -1,29 +1,9 @@
 const CONFIG_CACHE_MS = 30_000;
-let cachedConfig = null;
-let cachedConfigAt = 0;
 let cachedToken = null;
 let cachedTokenAt = 0;
 
 function nowMs() {
   return Date.now();
-}
-
-function normalizeBaseDir(dir, fallback) {
-  const raw = String(dir ?? '').trim();
-  const val = raw || fallback || '';
-  const s = String(val).trim();
-  if (!s) return '';
-  if (s.includes('\\') || s.includes('\0')) return '';
-  if (/^\/+$/.test(s) || s === '.' || s === './') return '/';
-
-  const parts = s
-    .replace(/^\/+/, '')
-    .split('/')
-    .map((p) => p.trim())
-    .filter(Boolean);
-  if (parts.length === 0) return '';
-
-  return parts.join('/') + '/';
 }
 
 function normalizePathNoTrailingSlash(path) {
@@ -35,39 +15,6 @@ function normalizePathNoTrailingSlash(path) {
     .map((p) => p.trim())
     .filter(Boolean);
   return parts.join('/');
-}
-
-export async function getRepoConfig(env) {
-  const ts = nowMs();
-  if (cachedConfig && ts - cachedConfigAt < CONFIG_CACHE_MS) return cachedConfig;
-
-  const keys = [
-    'github_repo_enabled',
-    'github_repo_owner',
-    'github_repo_name',
-    'github_repo_branch',
-    'github_repo_novels_path',
-    'github_repo_comics_path',
-  ];
-
-  const placeholders = keys.map(() => '?').join(',');
-  const { results } = await env.DB.prepare(
-    `SELECT key, value FROM site_settings WHERE key IN (${placeholders})`
-  ).bind(...keys).all();
-
-  const map = {};
-  for (const row of results || []) map[row.key] = row.value;
-
-  const enabled = map.github_repo_enabled === 'true';
-  const owner = String(map.github_repo_owner || '').trim();
-  const repo = String(map.github_repo_name || '').trim();
-  const branch = String(map.github_repo_branch || '').trim() || 'main';
-  const novelsPath = normalizeBaseDir(map.github_repo_novels_path, 'novels/');
-  const comicsPath = normalizeBaseDir(map.github_repo_comics_path, 'comics/');
-
-  cachedConfig = { enabled, owner, repo, branch, novelsPath, comicsPath };
-  cachedConfigAt = ts;
-  return cachedConfig;
 }
 
 export async function getRepoToken(env) {
@@ -89,8 +36,6 @@ export async function getRepoToken(env) {
 }
 
 export function invalidateGitHubRepoCache() {
-  cachedConfig = null;
-  cachedConfigAt = 0;
   cachedToken = null;
   cachedTokenAt = 0;
 }
@@ -151,6 +96,40 @@ export function buildGitHubRawUrl({ owner, repo, branch }, path) {
   );
 }
 
+function throwGitHubApiError({ status, message, token }) {
+  const msg = String(message || 'GitHub API error');
+  const isRateLimit = status === 403 && /rate limit exceeded/i.test(msg);
+  if (isRateLimit) {
+    const hint = token
+      ? '（已使用 Token 仍被限流，请稍后重试或更换 Token）'
+      : '（匿名请求限额很低，建议配置 GITHUB_REPO_TOKEN 或在后台保存 Token）';
+    const err = new Error(`GitHub API 触发限流：${msg}${hint}`);
+    err.status = status;
+    throw err;
+  }
+
+  const isBadRef = status === 404 && /No commit found for the ref/i.test(msg);
+  if (isBadRef) {
+    const err = new Error(`GitHub 分支/标签不存在：${msg}（请检查后台配置的 Branch，常见为 main 或 master）`);
+    err.status = status;
+    throw err;
+  }
+
+  const isNotFound = status === 404 && /not found/i.test(msg);
+  if (isNotFound) {
+    const hint = token
+      ? '（已使用 Token 仍 404：请检查 owner/repo、目录路径是否存在，或 Token 是否对该仓库有权限）'
+      : '（可能原因：仓库不存在 / 目录路径不存在 / 私有仓库未配置 Token）';
+    const err = new Error(`GitHub 资源不存在或无权限：${msg}${hint}`);
+    err.status = status;
+    throw err;
+  }
+
+  const err = new Error(`GitHub API 请求失败：${status} ${msg}`);
+  err.status = status;
+  throw err;
+}
+
 export async function githubApiJson(env, urlPath, { ref } = {}) {
   const token = await getRepoToken(env);
   const url = buildGitHubApiUrl(urlPath, { ref });
@@ -173,39 +152,34 @@ export async function githubApiJson(env, urlPath, { ref } = {}) {
 
   if (!res.ok) {
     const msg = String(data?.message || res.statusText || 'GitHub API error');
-    const isRateLimit = res.status === 403 && /rate limit exceeded/i.test(msg);
-    if (isRateLimit) {
-      const hint = token
-        ? '（已使用 Token 仍被限流，请稍后重试或更换 Token）'
-        : '（匿名请求限额很低，建议配置 GITHUB_REPO_TOKEN 或在后台保存 Token）';
-      const err = new Error(`GitHub API 触发限流：${msg}${hint}`);
-      err.status = res.status;
-      throw err;
-    }
-
-    const isBadRef = res.status === 404 && /No commit found for the ref/i.test(msg);
-    if (isBadRef) {
-      const err = new Error(`GitHub 分支/标签不存在：${msg}（请检查后台配置的 Branch，常见为 main 或 master）`);
-      err.status = res.status;
-      throw err;
-    }
-
-    const isNotFound = res.status === 404 && /not found/i.test(msg);
-    if (isNotFound) {
-      const hint = token
-        ? '（已使用 Token 仍 404：请检查 owner/repo、目录路径是否存在，或 Token 是否对该仓库有权限）'
-        : '（可能原因：仓库不存在 / 目录路径不存在 / 私有仓库未配置 Token）';
-      const err = new Error(`GitHub 资源不存在或无权限：${msg}${hint}`);
-      err.status = res.status;
-      throw err;
-    }
-
-    const err = new Error(`GitHub API 请求失败：${res.status} ${msg}`);
-    err.status = res.status;
-    throw err;
+    throwGitHubApiError({ status: res.status, message: msg, token });
   }
 
   return data;
+}
+
+export async function githubApiRaw(env, urlPath, { ref } = {}) {
+  const token = await getRepoToken(env);
+  const url = buildGitHubApiUrl(urlPath, { ref });
+
+  const headers = {
+    Accept: 'application/vnd.github.raw',
+    'User-Agent': 'novel-site',
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(url.toString(), { headers });
+  if (!res.ok) {
+    let msg = res.statusText || 'GitHub API error';
+    try {
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : null;
+      if (data?.message) msg = String(data.message);
+    } catch {}
+    throwGitHubApiError({ status: res.status, message: msg, token });
+  }
+  return res;
 }
 
 export async function githubRawFetch(env, rawUrl) {
@@ -228,6 +202,10 @@ export async function githubRawFetchByPath(env, { owner, repo, branch }, cleanPa
     return await githubRawFetch(env, rawUrl.toString());
   } catch (e) {
     const apiPath = encodePathSegments(cleanPath);
+    try {
+      return await githubApiRaw(env, `/repos/${owner}/${repo}/contents/${apiPath}`, { ref: branch });
+    } catch {}
+
     const meta = await githubApiJson(env, `/repos/${owner}/${repo}/contents/${apiPath}`, { ref: branch });
     if (!meta || meta.type !== 'file' || !meta.download_url) throw e;
     return await githubRawFetch(env, meta.download_url);

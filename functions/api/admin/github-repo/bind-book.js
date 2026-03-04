@@ -1,6 +1,7 @@
 // POST /api/admin/github-repo/bind-book — 直连绑定 GitHub 小说文件为书籍（仅超管）
 import { checkAdmin, requireSuperAdmin, parseJsonBody, validateId } from '../../_utils.js';
-import { getRepoConfig, githubApiJson, sanitizeRepoPath } from '../../utils/githubRepoContent.js';
+import { githubApiJson, sanitizeRepoPath } from '../../utils/githubRepoContent.js';
+import { getGitHubRepoGlobalEnabled, resolveGitHubRepoConfig } from '../../utils/githubRepos.js';
 
 const MAX_CATEGORY_IDS = 20;
 
@@ -12,7 +13,6 @@ function encodePathSegments(path) {
 }
 
 function ensureConfigReady(config) {
-  if (!config?.enabled) throw new Error('GitHub 仓库内容未启用');
   if (!config.owner || !config.repo || !config.branch) throw new Error('GitHub 仓库配置不完整');
   if (!config.novelsPath) throw new Error('GitHub 小说目录配置不完整');
 }
@@ -43,6 +43,7 @@ export async function onRequestPost(context) {
   const author = String(body.author || '').trim().slice(0, 100);
   const description = String(body.description || '').trim().slice(0, 2000);
   const path = String(body.path || '').trim();
+  const repoIdRaw = body.repo_id ?? body.repoId ?? null;
   const clientName = typeof body.name === 'string' ? body.name.trim() : '';
   const clientSize = Number(body.size || 0);
 
@@ -64,17 +65,36 @@ export async function onRequestPost(context) {
   if (!path) return Response.json({ error: 'Missing path' }, { status: 400 });
 
   try {
-    const config = await getRepoConfig(env);
+    const enabled = await getGitHubRepoGlobalEnabled(env);
+    if (!enabled) throw new Error('GitHub 仓库内容未启用');
+
+    if (repoIdRaw !== null && repoIdRaw !== undefined && !/^\d+$/.test(String(repoIdRaw))) {
+      return Response.json({ error: 'Invalid repo_id' }, { status: 400 });
+    }
+    const repoId = repoIdRaw ? Number(repoIdRaw) : null;
+
+    const config = await resolveGitHubRepoConfig(env, { repoId });
+    if (!config) throw new Error('未找到可用的 GitHub 仓库配置');
     ensureConfigReady(config);
 
     const cleanPath = sanitizeRepoPath(path, [config.novelsPath]);
     if (!isAllowedNovelFile(cleanPath)) return Response.json({ error: '仅支持 TXT/EPUB 文件绑定' }, { status: 400 });
 
-    const sourceKey = `gh:${cleanPath}`;
+    const sourceKey = config.id ? `gh:${config.id}:${cleanPath}` : `gh:${cleanPath}`;
+    const legacySourceKey = `gh:${cleanPath}`;
 
-    const existing = await env.DB.prepare('SELECT id, title, source_name, source_size FROM books WHERE source_key = ? LIMIT 1')
+    let existing = await env.DB.prepare('SELECT id, title, source_name, source_size FROM books WHERE source_key = ? LIMIT 1')
       .bind(sourceKey)
       .first();
+    if (!existing?.id && config.id) {
+      const defaultConfig = await resolveGitHubRepoConfig(env, { repoId: null });
+      const defaultId = defaultConfig?.id ?? null;
+      if (defaultId && defaultId === config.id) {
+        existing = await env.DB.prepare('SELECT id, title, source_name, source_size FROM books WHERE source_key = ? LIMIT 1')
+          .bind(legacySourceKey)
+          .first();
+      }
+    }
     if (existing?.id) {
       return Response.json({
         success: true,

@@ -1,6 +1,7 @@
-// GET /api/admin/github-repo/scan?type=novels|comics — 扫描 GitHub 仓库目录内容（仅超管）
+// GET /api/admin/github-repo/scan?type=novels|comics&repo_id=&dir= — 扫描 GitHub 仓库目录内容（仅超管）
 import { checkAdmin, requireSuperAdmin, sha256Hash } from '../../_utils.js';
-import { getRepoConfig, githubApiJson, sanitizeRepoPath } from '../../utils/githubRepoContent.js';
+import { githubApiJson, sanitizeRepoPath } from '../../utils/githubRepoContent.js';
+import { getGitHubRepoGlobalEnabled, resolveGitHubRepoConfig } from '../../utils/githubRepos.js';
 
 function encodePathSegments(path) {
   return String(path || '')
@@ -10,7 +11,6 @@ function encodePathSegments(path) {
 }
 
 function ensureConfigReady(config) {
-  if (!config?.enabled) throw new Error('GitHub 仓库内容未启用');
   if (!config.owner || !config.repo || !config.branch) throw new Error('GitHub 仓库配置不完整');
   if (!config.novelsPath || !config.comicsPath) throw new Error('GitHub 目录配置不完整');
 }
@@ -57,12 +57,32 @@ export async function onRequestGet(context) {
   }
 
   try {
-    const config = await getRepoConfig(env);
+    const enabled = await getGitHubRepoGlobalEnabled(env);
+    if (!enabled) throw new Error('GitHub 仓库内容未启用');
+
+    const repoIdRaw = url.searchParams.get('repo_id');
+    if (repoIdRaw !== null && !/^\d+$/.test(repoIdRaw)) {
+      return Response.json({ error: 'Invalid repo_id' }, { status: 400 });
+    }
+    const repoId = repoIdRaw ? Number(repoIdRaw) : null;
+
+    const config = await resolveGitHubRepoConfig(env, { repoId });
+    if (!config) throw new Error('未找到可用的 GitHub 仓库配置');
     ensureConfigReady(config);
 
     const base = type === 'novels' ? config.novelsPath : config.comicsPath;
-    const cleanBase = sanitizeRepoPath(base, [base]);
-    const configHash = await sha256Hash(`${config.owner}/${config.repo}@${config.branch}:${cleanBase}`);
+
+    const dirParam = type === 'novels' ? url.searchParams.get('dir') : null;
+    if (type !== 'novels' && url.searchParams.has('dir')) {
+      return Response.json({ error: 'dir only supported for novels' }, { status: 400 });
+    }
+
+    const baseOrDirInput = dirParam === null ? base : (dirParam || base);
+    const cleanBase = sanitizeRepoPath(baseOrDirInput, [base]);
+
+    const repoKey = config.id ? `id${config.id}` : 'legacy';
+    const variant = type === 'novels' ? (dirParam === null ? 'flat' : 'dir') : 'base';
+    const configHash = await sha256Hash(`${repoKey}:${config.owner}/${config.repo}@${config.branch}:${variant}:${cleanBase}`);
     const apiPath = encodePathSegments(cleanBase);
 
     const urlPath = apiPath
@@ -72,18 +92,30 @@ export async function onRequestGet(context) {
     if (!Array.isArray(data)) return Response.json({ error: 'GitHub 返回不是目录列表' }, { status: 400 });
 
     if (type === 'novels') {
+      const includeDirs = dirParam !== null;
       const items = data
-        .filter((x) => x && x.type === 'file' && isNovelFile(x.name))
-        .map((x) => ({ name: x.name, path: x.path, size: x.size || 0, sha: x.sha || '' }))
-        .sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { numeric: true, sensitivity: 'base' }));
+        .filter((x) => x && (includeDirs ? (x.type === 'dir' || (x.type === 'file' && isNovelFile(x.name))) : (x.type === 'file' && isNovelFile(x.name))))
+        .map((x) => ({
+          kind: x.type === 'dir' ? 'dir' : 'file',
+          repo_id: config.id ?? null,
+          name: x.name,
+          path: x.path,
+          size: x.size || 0,
+          sha: x.sha || '',
+        }))
+        .sort((a, b) => {
+          if (a.kind !== b.kind) return a.kind === 'dir' ? -1 : 1;
+          return String(a.name).localeCompare(String(b.name), undefined, { numeric: true, sensitivity: 'base' });
+        });
       context.waitUntil(saveScanCache(env, { type, configHash, base: cleanBase, items }));
-      return Response.json({ success: true, type, base: cleanBase, items });
+      return Response.json({ success: true, type, repo_id: config.id ?? null, base: cleanBase, items });
     }
 
     const items = data
       .filter((x) => x && (x.type === 'dir' || (x.type === 'file' && isCbzFile(x.name))))
       .map((x) => ({
         kind: x.type === 'dir' ? 'dir' : 'cbz',
+        repo_id: config.id ?? null,
         name: x.name,
         path: x.path,
         size: x.size || 0,
@@ -94,7 +126,7 @@ export async function onRequestGet(context) {
         return String(a.name).localeCompare(String(b.name), undefined, { numeric: true, sensitivity: 'base' });
       });
     context.waitUntil(saveScanCache(env, { type, configHash, base: cleanBase, items }));
-    return Response.json({ success: true, type, base: cleanBase, items });
+    return Response.json({ success: true, type, repo_id: config.id ?? null, base: cleanBase, items });
   } catch (e) {
     return Response.json({ error: e.message || 'Scan failed' }, { status: 400 });
   }

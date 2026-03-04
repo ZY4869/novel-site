@@ -1,6 +1,7 @@
-// GET /api/admin/github-repo/comic-pages?dir=... — 列出 GitHub 图片目录下的页（仅超管）
+// GET /api/admin/github-repo/comic-pages?dir=...&repo_id=... — 列出 GitHub 图片目录下的页（仅超管）
 import { checkAdmin, requireSuperAdmin } from '../../_utils.js';
-import { getRepoConfig, githubApiJson, sanitizeRepoPath } from '../../utils/githubRepoContent.js';
+import { githubApiJson, sanitizeRepoPath } from '../../utils/githubRepoContent.js';
+import { getGitHubRepoGlobalEnabled, resolveGitHubRepoConfig } from '../../utils/githubRepos.js';
 
 function encodePathSegments(path) {
   return String(path || '')
@@ -10,7 +11,6 @@ function encodePathSegments(path) {
 }
 
 function ensureConfigReady(config) {
-  if (!config?.enabled) throw new Error('GitHub 仓库内容未启用');
   if (!config.owner || !config.repo || !config.branch) throw new Error('GitHub 仓库配置不完整');
   if (!config.comicsPath) throw new Error('GitHub 漫画目录配置不完整');
 }
@@ -42,7 +42,17 @@ export async function onRequestGet(context) {
   if (!dir) return Response.json({ error: 'Missing dir' }, { status: 400 });
 
   try {
-    const config = await getRepoConfig(env);
+    const enabled = await getGitHubRepoGlobalEnabled(env);
+    if (!enabled) throw new Error('GitHub 仓库内容未启用');
+
+    const repoIdRaw = url.searchParams.get('repo_id');
+    if (repoIdRaw !== null && !/^\d+$/.test(repoIdRaw)) {
+      return Response.json({ error: 'Invalid repo_id' }, { status: 400 });
+    }
+    const repoId = repoIdRaw ? Number(repoIdRaw) : null;
+
+    const config = await resolveGitHubRepoConfig(env, { repoId });
+    if (!config) throw new Error('未找到可用的 GitHub 仓库配置');
     ensureConfigReady(config);
 
     const cleanDir = sanitizeRepoPath(dir, [config.comicsPath]);

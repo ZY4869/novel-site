@@ -1,6 +1,8 @@
 // GET /api/comics/:id/cover — 漫画封面（公开）
 import { validateId, ensureSchemaReady } from '../../_utils.js';
-import { getRepoConfig, githubRawFetchByPath, sanitizeRepoPath } from '../../utils/githubRepoContent.js';
+import { githubRawFetchByPath, sanitizeRepoPath } from '../../utils/githubRepoContent.js';
+import { parseGhKey } from '../../utils/ghKey.js';
+import { getGitHubRepoGlobalEnabled, resolveGitHubRepoConfig } from '../../utils/githubRepos.js';
 
 export async function onRequestGet(context) {
   const { env, params } = context;
@@ -24,12 +26,18 @@ export async function onRequestGet(context) {
   // GitHub 直连：cover_key / image_key = "gh:<path>"
   if (String(key).startsWith('gh:')) {
     try {
-      const config = await getRepoConfig(env);
-      if (!config?.enabled || !config.owner || !config.repo || !config.branch || !config.comicsPath) {
+      const enabled = await getGitHubRepoGlobalEnabled(env);
+      if (!enabled) return new Response('Not found', { status: 404 });
+
+      const parsed = parseGhKey(String(key));
+      if (!parsed) return new Response('Not found', { status: 404 });
+
+      const config = await resolveGitHubRepoConfig(env, { repoId: parsed.repoId });
+      if (!config || !config.owner || !config.repo || !config.branch || !config.comicsPath) {
         return new Response('Not found', { status: 404 });
       }
 
-      const cleanPath = sanitizeRepoPath(String(key).slice(3), [config.comicsPath]);
+      const cleanPath = sanitizeRepoPath(parsed.path, [config.comicsPath]);
       const upstream = await githubRawFetchByPath(env, config, cleanPath);
 
       const headers = new Headers();

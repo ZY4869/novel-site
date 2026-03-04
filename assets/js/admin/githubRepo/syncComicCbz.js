@@ -27,7 +27,7 @@ function toFile(blob, name) {
   }
 }
 
-export async function syncImportGitHubCbz({ path, name, title, description }, { onStatus, onProgress } = {}) {
+export async function syncImportGitHubCbz({ repoId = null, path, name, title, description }, { onStatus, onProgress } = {}) {
   if (!globalThis.JSZip?.loadAsync) throw new Error('缺少 JSZip，无法解析 CBZ');
 
   const safeName = String(name || 'comic.cbz');
@@ -35,7 +35,7 @@ export async function syncImportGitHubCbz({ path, name, title, description }, { 
   const finalDesc = String(description || '').trim().slice(0, 2000);
 
   if (typeof onStatus === 'function') onStatus('下载 GitHub 文件中...');
-  const blob = await fetchGitHubRawBlob(path);
+  const blob = await fetchGitHubRawBlob(path, { repoId });
   const file = toFile(blob, safeName);
 
   if (!/\.(cbz|zip)$/i.test(safeName)) throw new Error('仅支持 .cbz/.zip 同步导入');
@@ -115,4 +115,3 @@ export async function syncImportGitHubCbz({ path, name, title, description }, { 
 
   return { comicId, pageCount: total, title: finalTitle };
 }
-

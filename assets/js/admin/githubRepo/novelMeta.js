@@ -3,7 +3,7 @@ import { fetchGitHubRawBlob } from './api.js';
 
 const MAX_META_BYTES = 50 * 1024 * 1024;
 
-export async function tryComputeAndSaveSourceMeta({ bookId, path, name, sizeBytes, onTip } = {}) {
+export async function tryComputeAndSaveSourceMeta({ bookId, repoId = null, path, name, sizeBytes, onTip } = {}) {
   if (!bookId || !path) return null;
 
   try {
@@ -15,7 +15,7 @@ export async function tryComputeAndSaveSourceMeta({ bookId, path, name, sizeByte
       return null;
     }
 
-    const blob = await fetchGitHubRawBlob(path);
+    const blob = await fetchGitHubRawBlob(path, { repoId });
     if (!blob || !blob.size) return null;
 
     if (blob.size > MAX_META_BYTES) {

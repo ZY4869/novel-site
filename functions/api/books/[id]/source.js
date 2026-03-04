@@ -1,6 +1,8 @@
 // GET /api/books/:id/source — 下载书籍源文件（不拆解保留）
 import { validateId, ensureSchemaReady, sanitizeFilename } from '../../_utils.js';
-import { getRepoConfig, githubRawFetchByPath, sanitizeRepoPath } from '../../utils/githubRepoContent.js';
+import { githubRawFetchByPath, sanitizeRepoPath } from '../../utils/githubRepoContent.js';
+import { parseGhKey } from '../../utils/ghKey.js';
+import { getGitHubRepoGlobalEnabled, resolveGitHubRepoConfig } from '../../utils/githubRepos.js';
 
 function contentDispositionAttachment(filename) {
   const safe = String(filename || 'file').replace(/["\\]/g, '_');
@@ -23,12 +25,18 @@ export async function onRequestGet(context) {
   // GitHub 直连：source_key = "gh:<path>"
   if (String(book.source_key).startsWith('gh:')) {
     try {
-      const config = await getRepoConfig(env);
-      if (!config?.enabled || !config.owner || !config.repo || !config.branch || !config.novelsPath) {
+      const enabled = await getGitHubRepoGlobalEnabled(env);
+      if (!enabled) return new Response('Not found', { status: 404 });
+
+      const parsed = parseGhKey(String(book.source_key));
+      if (!parsed) return new Response('Not found', { status: 404 });
+
+      const config = await resolveGitHubRepoConfig(env, { repoId: parsed.repoId });
+      if (!config || !config.owner || !config.repo || !config.branch || !config.novelsPath) {
         return new Response('Not found', { status: 404 });
       }
 
-      const cleanPath = sanitizeRepoPath(String(book.source_key).slice(3), [config.novelsPath]);
+      const cleanPath = sanitizeRepoPath(parsed.path, [config.novelsPath]);
       const upstream = await githubRawFetchByPath(env, config, cleanPath);
 
       const filename = sanitizeFilename(book.source_name || cleanPath.split('/').pop() || `book-${id}`, 120);
