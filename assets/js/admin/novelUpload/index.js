@@ -4,6 +4,7 @@ import { parseEpubFile } from './parseEpub.js';
 import { parseTxtFile } from './parseTxt.js';
 import { bindChaptersPreview, renderChaptersPreview, updateChapterSummary } from './preview.js';
 import { startImportAction, startSourceOnlyAction } from './actions.js';
+import { createCategoryPicker } from '../categories/picker.js';
 
 const MAX_IMPORT_BYTES = 50 * 1024 * 1024;
 const MAX_SOURCE_BYTES = 200 * 1024 * 1024;
@@ -19,6 +20,13 @@ function detectKind(file) {
 export function initNovelUpload({ onDone } = {}) {
   const fileEl = document.getElementById('novel-file');
   if (!fileEl) return;
+
+  const importCategoryPicker = createCategoryPicker({
+    container: document.getElementById('novel-import-category-picker'),
+  });
+  const sourceCategoryPicker = createCategoryPicker({
+    container: document.getElementById('novel-source-category-picker'),
+  });
 
   const autofillTitleFromFilename = (el, filename) => {
     if (!el) return;
@@ -211,11 +219,20 @@ export function initNovelUpload({ onDone } = {}) {
   });
 
   document.getElementById('novel-start-btn')?.addEventListener('click', () =>
-    startImportAction({ state, ensureParsed, onDone })
+    startImportAction({
+      state,
+      ensureParsed,
+      onDone,
+      getCategoryIdsForNewBook: () => importCategoryPicker?.getSelectedIds?.() || [],
+    })
   );
   document.getElementById('novel-cancel-btn')?.addEventListener('click', () => resetUi());
   document.getElementById('novel-source-create-btn')?.addEventListener('click', () =>
-    startSourceOnlyAction({ state, onDone })
+    startSourceOnlyAction({
+      state,
+      onDone,
+      getCategoryIdsForNewBook: () => sourceCategoryPicker?.getSelectedIds?.() || [],
+    })
   );
   document.getElementById('novel-source-cancel-btn')?.addEventListener('click', () => resetUi());
 

@@ -402,6 +402,10 @@
                 <label>简介</label>
                 <textarea id="novel-book-desc" placeholder="简介（可选）" style="min-height:60px" maxlength="2000"></textarea>
               </div>
+              <div class="form-group" style="margin:10px 0 0">
+                <label>分类（可选）</label>
+                <div id="novel-import-category-picker" class="category-picker"></div>
+              </div>
             </div>
           </div>
 
@@ -445,6 +449,10 @@
               <label>简介</label>
               <textarea id="novel-source-desc" placeholder="可选" style="min-height:60px" maxlength="2000"></textarea>
             </div>
+            <div class="form-group" style="margin:10px 0 0">
+              <label>分类（可选）</label>
+              <div id="novel-source-category-picker" class="category-picker"></div>
+            </div>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn" id="novel-source-create-btn">创建并上传源文件</button>
@@ -460,6 +468,10 @@
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
           <button class="btn btn-sm" id="gh-repo-scan-novels-btn">扫描 GitHub 小说目录</button>
           <span id="gh-repo-novels-msg" style="font-size:12px;color:var(--text-light)"></span>
+        </div>
+        <div class="form-group" style="margin:-4px 0 10px">
+          <label>新书分类（可选）</label>
+          <div id="gh-repo-category-picker" class="category-picker"></div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:-4px 0 10px">
           <label style="display:flex;gap:6px;align-items:center;font-size:13px;color:var(--text-light)">
@@ -541,6 +553,10 @@
           <label>简介</label>
           <textarea id="book-desc" placeholder="输入书籍简介" style="min-height:80px" maxlength="2000"></textarea>
         </div>
+        <div class="form-group">
+          <label>分类（可选）</label>
+          <div id="book-category-picker" class="category-picker"></div>
+        </div>
         <button class="btn" id="create-book-btn">创建书籍</button>
         <div id="book-msg"></div>
       </div>
@@ -554,6 +570,27 @@
         </div>
         <div id="book-list-msg"></div>
         <ul class="admin-list" id="book-list"><li class="loading">加载中...</li></ul>
+      </div>
+
+      <!-- 分类管理 -->
+      <div class="admin-section admin-only" style="display:none" data-admin-tab="novel" data-admin-subtab="categories" data-admin-subtab-label="分类管理" data-admin-subtab-order="15">
+        <h3>🗂️ 分类管理</h3>
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:end">
+          <div>
+            <label style="font-size:12px;color:var(--text-light)">分类名</label>
+            <input type="text" id="category-name" placeholder="如：历史" maxlength="50" style="width:140px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text)">
+          </div>
+          <div style="flex:1;min-width:220px">
+            <label style="font-size:12px;color:var(--text-light)">标记（逗号/空格分隔）</label>
+            <input type="text" id="category-marks" placeholder="如：NSFW, 历史" maxlength="200" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text)">
+          </div>
+          <label style="display:flex;gap:6px;align-items:center;font-size:13px;color:var(--text-light);margin:0 8px 6px 0;white-space:nowrap">
+            <input type="checkbox" id="category-is-special"> 特殊标记
+          </label>
+          <button class="btn" id="create-category-btn">创建分类</button>
+        </div>
+        <ul class="admin-list" id="category-list"><li style="color:var(--text-light)">加载中...</li></ul>
+        <div id="category-msg"></div>
       </div>
 
       <!-- 书籍编辑弹窗 -->
@@ -589,7 +626,58 @@
             <label>标签</label>
             <div id="edit-book-tags" style="display:flex;gap:6px;flex-wrap:wrap"></div>
           </div>
+          <div class="form-group">
+            <label>分类</label>
+            <div id="edit-book-category-picker" class="category-picker"></div>
+          </div>
+          <div class="form-group">
+            <label style="display:flex;gap:6px;align-items:center;font-size:14px;color:var(--text-light)">
+              <input type="checkbox" id="edit-book-pinned"> 置顶（置顶区与分类并存）
+            </label>
+          </div>
           <button class="btn" id="save-book-edit-btn">保存</button>
+        </div>
+      </div>
+
+      <!-- 分类编辑弹窗 -->
+      <div class="settings-overlay" id="category-edit-overlay">
+        <div class="settings-panel" style="max-width:520px;border-radius:var(--radius)">
+          <h3>编辑分类<button class="close-btn" id="close-category-edit">✕</button></h3>
+          <input type="hidden" id="edit-category-id">
+          <div class="form-group">
+            <label>名称</label>
+            <input type="text" id="edit-category-name" maxlength="50">
+          </div>
+          <div class="form-group">
+            <label>标记（逗号/空格分隔）</label>
+            <input type="text" id="edit-category-marks" maxlength="200">
+          </div>
+          <div class="form-group">
+            <label style="display:flex;gap:6px;align-items:center;font-size:14px;color:var(--text-light)">
+              <input type="checkbox" id="edit-category-is-special"> 特殊标记
+            </label>
+          </div>
+          <button class="btn" id="save-category-edit-btn">保存</button>
+          <div id="category-edit-msg" style="margin-top:8px"></div>
+        </div>
+      </div>
+
+      <!-- 分类书籍管理弹窗 -->
+      <div class="settings-overlay" id="category-books-overlay">
+        <div class="settings-panel" style="max-width:760px;border-radius:var(--radius)">
+          <h3>管理分类书籍<button class="close-btn" id="close-category-books">✕</button></h3>
+          <div id="category-books-title" style="font-size:13px;color:var(--text-light);margin:-10px 0 12px"></div>
+          <div class="form-group" style="max-width:420px">
+            <label>搜索</label>
+            <input type="search" id="category-books-search" placeholder="按书名/作者搜索..." autocomplete="off">
+          </div>
+          <div style="font-size:12px;color:var(--text-light);margin:-4px 0 10px" id="category-books-hint"></div>
+          <ul class="admin-list" id="category-books-list"><li style="color:var(--text-light)">加载中...</li></ul>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px">
+            <button class="btn" id="save-category-books-btn">保存</button>
+            <button class="btn btn-sm" id="cancel-category-books-btn">取消</button>
+            <span id="category-books-msg" style="font-size:12px;color:var(--text-light)"></span>
+          </div>
         </div>
       </div>
 

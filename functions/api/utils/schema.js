@@ -24,6 +24,7 @@ const SCHEMA_STATEMENTS = [
   // books status + retention (normal / unlisted / deleted / purging)
   "ALTER TABLE books ADD COLUMN status TEXT DEFAULT 'normal'",
   'ALTER TABLE books ADD COLUMN delete_at TEXT DEFAULT NULL',
+  'ALTER TABLE books ADD COLUMN pinned_at TEXT DEFAULT NULL',
   // 兼容老数据：若列存在则填默认值
   "UPDATE books SET status = 'normal' WHERE status IS NULL",
 
@@ -40,6 +41,30 @@ const SCHEMA_STATEMENTS = [
   // tags
   "CREATE TABLE IF NOT EXISTS tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, color TEXT DEFAULT '#888')",
   'CREATE TABLE IF NOT EXISTS book_tags (book_id INTEGER, tag_id INTEGER, PRIMARY KEY (book_id, tag_id))',
+
+  // book categories (multi)
+  `
+    CREATE TABLE IF NOT EXISTS book_categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      marks_json TEXT NOT NULL DEFAULT '[]',
+      is_special INTEGER NOT NULL DEFAULT 0,
+      created_by INTEGER DEFAULT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `,
+  'CREATE INDEX IF NOT EXISTS idx_book_categories_special ON book_categories(is_special, name)',
+  `
+    CREATE TABLE IF NOT EXISTS book_category_books (
+      category_id INTEGER NOT NULL,
+      book_id INTEGER NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (category_id, book_id)
+    )
+  `,
+  'CREATE INDEX IF NOT EXISTS idx_bcb_category_id ON book_category_books(category_id)',
+  'CREATE INDEX IF NOT EXISTS idx_bcb_book_id ON book_category_books(book_id)',
 
   // GitHub OAuth
   'ALTER TABLE admin_users ADD COLUMN github_id INTEGER DEFAULT NULL',

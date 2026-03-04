@@ -100,6 +100,7 @@ function getSubtabSectionsForCurrentTab(tab) {
     const inTab = attrs.length === 0 || attrs.includes('all') || attrs.includes(tab);
     if (!inTab) return false;
     if (section.classList.contains('super-admin-only') && section.style.display === 'none') return false;
+    if (section.classList.contains('admin-only') && section.style.display === 'none') return false;
     return true;
   });
 
@@ -222,4 +223,3 @@ export function syncFromUrl({ replace = true } = {}) {
   }
   if (changed && replace) history.replaceState(null, '', url.toString());
 }
-

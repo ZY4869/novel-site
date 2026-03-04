@@ -124,3 +124,34 @@
   .book-header-with-cover { flex-direction: column; align-items: center; text-align: center; }
   .book-header-with-cover .book-cover-img { width: 100px; }
 }
+
+/* ===== 书架置顶与分类分组 ===== */
+.shelf-section { margin-top: 16px; }
+.shelf-section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0 10px;
+}
+.shelf-section-title { font-size: 13px; color: var(--text-light); font-weight: 700; }
+.shelf-section-meta { font-size: 12px; color: var(--text-light); white-space: nowrap; }
+
+.category-group { margin-top: 18px; }
+.category-group-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 10px 0 10px;
+}
+.category-group-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+}
+.category-group-name { font-size: 14px; font-weight: 700; color: var(--text); }
+.category-group-meta { font-size: 12px; color: var(--text-light); white-space: nowrap; }
+.category-group-marks { display: flex; gap: 6px; flex-wrap: wrap; }

@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS books (
   source_uploaded_at TEXT DEFAULT NULL,
   source_chapter_count INTEGER DEFAULT NULL,
   source_word_count INTEGER DEFAULT NULL,
+  pinned_at TEXT DEFAULT NULL,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
@@ -85,6 +86,29 @@ CREATE TABLE IF NOT EXISTS book_tags (
 );
 CREATE INDEX IF NOT EXISTS idx_book_tags_book_id ON book_tags(book_id);
 CREATE INDEX IF NOT EXISTS idx_book_tags_tag_id ON book_tags(tag_id);
+
+/* 分类系统 */
+CREATE TABLE IF NOT EXISTS book_categories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL UNIQUE,
+  marks_json TEXT NOT NULL DEFAULT '[]',
+  is_special INTEGER NOT NULL DEFAULT 0,
+  created_by INTEGER DEFAULT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_book_categories_special ON book_categories(is_special, name);
+
+CREATE TABLE IF NOT EXISTS book_category_books (
+  category_id INTEGER NOT NULL,
+  book_id INTEGER NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (category_id, book_id),
+  FOREIGN KEY (category_id) REFERENCES book_categories(id) ON DELETE CASCADE,
+  FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_bcb_category_id ON book_category_books(category_id);
+CREATE INDEX IF NOT EXISTS idx_bcb_book_id ON book_category_books(book_id);
 
 /* 认证限流表（IP锁定防暴力破解） */
 CREATE TABLE IF NOT EXISTS auth_attempts (

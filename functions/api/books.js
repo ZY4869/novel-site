@@ -11,6 +11,7 @@ export async function onRequestGet(context) {
 
   const commonSelect = `
     b.id, b.title, b.author, b.description, b.cover_key,
+    b.pinned_at,
     b.source_name, b.source_type, b.source_size, b.source_uploaded_at,
     b.source_chapter_count, b.source_word_count,
     CASE WHEN b.source_key IS NOT NULL THEN 1 ELSE 0 END as has_source,
@@ -28,7 +29,7 @@ export async function onRequestGet(context) {
       SELECT ${commonSelect}
       FROM books b
       WHERE (b.status IS NULL OR b.status = 'normal')
-      ORDER BY b.updated_at DESC
+      ORDER BY (b.pinned_at IS NOT NULL) DESC, b.pinned_at DESC, b.updated_at DESC
     `
     : isDemo
       ? `
@@ -36,13 +37,13 @@ export async function onRequestGet(context) {
           b.created_by, b.status, b.delete_at, b.annotation_enabled, b.annotation_locked
         FROM books b
         WHERE (b.status IS NULL OR b.status = 'normal') OR b.created_by = ?
-        ORDER BY b.updated_at DESC
+        ORDER BY (b.pinned_at IS NOT NULL) DESC, b.pinned_at DESC, b.updated_at DESC
       `
       : `
         SELECT ${commonSelect},
           b.created_by, b.status, b.delete_at, b.annotation_enabled, b.annotation_locked
         FROM books b
-        ORDER BY b.updated_at DESC
+        ORDER BY (b.pinned_at IS NOT NULL) DESC, b.pinned_at DESC, b.updated_at DESC
       `;
 
   const stmt = env.DB.prepare(query);
@@ -66,6 +67,45 @@ export async function onRequestGet(context) {
 
   for (const book of results) {
     book.tags = tagsByBook[book.id] || [];
+  }
+
+  // 批量获取书籍分类（多对多）
+  let allBookCategories = [];
+  try {
+    const { results: bcResults } = await env.DB.prepare(`
+      SELECT bcb.book_id, c.id as category_id, c.name, c.is_special, c.marks_json
+      FROM book_category_books bcb JOIN book_categories c ON bcb.category_id = c.id
+    `).all();
+    allBookCategories = bcResults || [];
+  } catch {}
+
+  const categoriesByBook = {};
+  for (const bc of allBookCategories) {
+    if (!categoriesByBook[bc.book_id]) categoriesByBook[bc.book_id] = [];
+
+    let marks = [];
+    try {
+      const parsed = JSON.parse(String(bc.marks_json || '[]'));
+      marks = Array.isArray(parsed) ? parsed.map((x) => String(x)).filter(Boolean) : [];
+    } catch {
+      marks = [];
+    }
+
+    categoriesByBook[bc.book_id].push({
+      id: bc.category_id,
+      name: bc.name,
+      is_special: bc.is_special ? 1 : 0,
+      marks,
+    });
+  }
+
+  for (const book of results) {
+    const cats = categoriesByBook[book.id] || [];
+    cats.sort((a, b) => {
+      if ((b.is_special ? 1 : 0) !== (a.is_special ? 1 : 0)) return (b.is_special ? 1 : 0) - (a.is_special ? 1 : 0);
+      return String(a.name || '').localeCompare(String(b.name || ''), 'zh-CN');
+    });
+    book.categories = cats;
   }
 
   const response = Response.json({ books: results });
@@ -106,6 +146,7 @@ async function purgeExpiredBooks(env) {
         env.DB.prepare('DELETE FROM chapter_stats WHERE chapter_id IN (SELECT id FROM chapters WHERE book_id = ?)').bind(book.id),
         env.DB.prepare('DELETE FROM book_stats WHERE book_id = ?').bind(book.id),
         env.DB.prepare('DELETE FROM book_tags WHERE book_id = ?').bind(book.id),
+        env.DB.prepare('DELETE FROM book_category_books WHERE book_id = ?').bind(book.id),
         env.DB.prepare('DELETE FROM votes WHERE annotation_id IN (SELECT id FROM annotations WHERE book_id = ?)').bind(book.id),
         env.DB.prepare('DELETE FROM reports WHERE book_id = ?').bind(book.id),
         env.DB.prepare('DELETE FROM annotation_likes WHERE annotation_id IN (SELECT id FROM annotations WHERE book_id = ?)').bind(book.id),

@@ -121,6 +121,9 @@ function showAdminPanel(username, role) {
   document.querySelectorAll('.super-admin-only').forEach((el) => {
     el.style.display = role === 'super_admin' ? '' : 'none';
   });
+  document.querySelectorAll('.admin-only').forEach((el) => {
+    el.style.display = role === 'admin' || role === 'super_admin' ? '' : 'none';
+  });
   document.querySelectorAll('.hide-for-demo').forEach((el) => {
     el.style.display = role === 'demo' ? 'none' : '';
   });

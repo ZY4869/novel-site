@@ -537,6 +537,20 @@
   align-items: baseline;
 }
 
+#book-list .book-inline-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+#book-list .book-inline-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-right: 4px;
+}
+
 #book-list .book-badges {
   display: flex;
   gap: 6px;
@@ -568,6 +582,31 @@
   color: #e74c3c;
 }
 
+.badge-special,
+.badge-pinned {
+  border-color: rgba(226, 176, 122, 0.45);
+  background: rgba(226, 176, 122, 0.16);
+  color: var(--text);
+}
+
+.badge-gh {
+  border-color: rgba(52, 152, 219, 0.35);
+  background: rgba(52, 152, 219, 0.12);
+  color: #3498db;
+}
+
+.badge-source-stats {
+  border-color: rgba(155, 89, 182, 0.35);
+  background: rgba(155, 89, 182, 0.12);
+  color: #9b59b6;
+}
+
+.badge-source-mode {
+  border-color: rgba(46, 204, 113, 0.35);
+  background: rgba(46, 204, 113, 0.12);
+  color: #2ecc71;
+}
+
 #book-list .book-meta-row {
   display: flex;
   gap: 8px;
@@ -589,6 +628,75 @@
 
 .chip-muted {
   color: var(--text-light);
+}
+
+.chip-clickable {
+  cursor: pointer;
+  user-select: none;
+}
+.chip-clickable:hover {
+  opacity: 0.85;
+}
+.chip-clickable.is-selected {
+  border-color: var(--accent);
+  background: rgba(226, 176, 122, 0.18);
+}
+
+.category-picker {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.chip-author {
+  border-color: rgba(52, 152, 219, 0.28);
+  background: rgba(52, 152, 219, 0.10);
+}
+
+.chip-chapters {
+  border-color: rgba(46, 204, 113, 0.28);
+  background: rgba(46, 204, 113, 0.10);
+}
+
+.chip-words {
+  border-color: rgba(155, 89, 182, 0.28);
+  background: rgba(155, 89, 182, 0.10);
+}
+
+.chip-source {
+  border-color: rgba(241, 196, 15, 0.28);
+  background: rgba(241, 196, 15, 0.10);
+}
+
+.chip-category {
+  border-color: rgba(52, 73, 94, 0.28);
+  background: rgba(52, 73, 94, 0.10);
+}
+
+.chip-category-special {
+  border-color: rgba(226, 176, 122, 0.38);
+  background: rgba(226, 176, 122, 0.16);
+}
+
+.chip-mark {
+  border-color: rgba(149, 165, 166, 0.28);
+  background: rgba(149, 165, 166, 0.10);
+  color: var(--text-light);
+}
+
+.category-title-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.category-marks-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
 }
 
 /* GitHub 小说批量选择 */

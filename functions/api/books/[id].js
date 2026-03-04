@@ -1,4 +1,4 @@
-// GET /api/books/:id — 获取书籍详情 + 章节目录 + 标签
+// GET /api/books/:id — 获取书籍详情 + 章节目录 + 标签 + 分类
 import { checkAdmin, ensureSchemaReady, validateId } from '../_utils.js';
 
 export async function onRequestGet(context) {
@@ -12,11 +12,12 @@ export async function onRequestGet(context) {
 
   const book = await env.DB.prepare(
     `
-      SELECT b.id, b.title, b.author, b.description, b.cover_key,
-        b.source_name, b.source_type, b.source_size, b.source_uploaded_at,
-        b.source_chapter_count, b.source_word_count,
-        CASE WHEN b.source_key IS NOT NULL THEN 1 ELSE 0 END as has_source,
-        b.status, b.delete_at,
+	      SELECT b.id, b.title, b.author, b.description, b.cover_key,
+	        b.pinned_at,
+	        b.source_name, b.source_type, b.source_size, b.source_uploaded_at,
+	        b.source_chapter_count, b.source_word_count,
+	        CASE WHEN b.source_key IS NOT NULL THEN 1 ELSE 0 END as has_source,
+	        b.status, b.delete_at,
         b.annotation_enabled, b.annotation_locked,
         b.created_by,
         b.created_at, b.updated_at,
@@ -58,8 +59,31 @@ export async function onRequestGet(context) {
       SELECT t.id, t.name, t.color FROM book_tags bt JOIN tags t ON bt.tag_id = t.id WHERE bt.book_id = ?
     `).bind(id).all();
     tags = tagResults || [];
-  } catch {}
-  book.tags = tags;
+	  } catch {}
+	  book.tags = tags;
 
-  return Response.json({ book, chapters });
+	  // 获取分类（多对多）
+	  let categories = [];
+	  try {
+	    const { results: catResults } = await env.DB.prepare(`
+	      SELECT c.id, c.name, c.is_special, c.marks_json
+	      FROM book_category_books bcb JOIN book_categories c ON bcb.category_id = c.id
+	      WHERE bcb.book_id = ?
+	      ORDER BY c.is_special DESC, c.name ASC
+	    `).bind(id).all();
+
+	    categories = (catResults || []).map((c) => {
+	      let marks = [];
+	      try {
+	        const parsed = JSON.parse(String(c.marks_json || '[]'));
+	        marks = Array.isArray(parsed) ? parsed.map((x) => String(x)).filter(Boolean) : [];
+	      } catch {
+	        marks = [];
+	      }
+	      return { id: c.id, name: c.name, is_special: c.is_special ? 1 : 0, marks };
+	    });
+	  } catch {}
+	  book.categories = categories;
+
+	  return Response.json({ book, chapters });
 }

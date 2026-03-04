@@ -5,14 +5,19 @@ import { openBookEditOverlay } from './bookEditModal.js';
 import { initBooksManagePage, updateBooksManagePage } from './booksManagePage.js';
 import { canSyncImportFromSource, syncImportFromBookSource } from './booksSync.js';
 import { computeSourceMetaFromArrayBuffer, computeSourceMetaFromFile, saveSourceMeta, uploadCoverIfEmpty } from './sourceMeta.js';
+import { createCategoryPicker } from './categories/picker.js';
 
 let booksCache = [];
 let booksPromise = null;
 let syncingSourceImport = false;
 let bookSearchQuery = '';
+let bookCreateCategoryPicker = null;
 
 export function initBooks() {
   initBooksManagePage();
+
+  const pickerEl = document.getElementById('book-category-picker');
+  if (pickerEl) bookCreateCategoryPicker = createCategoryPicker({ container: pickerEl });
 
   const search = document.getElementById('book-search');
   search?.addEventListener('input', () => {
@@ -285,9 +290,10 @@ function renderBookListFromCache() {
         const wordText = typeof displayWordCount === 'number' ? displayWordCount.toLocaleString('zh-CN') : String(displayWordCount);
 
         const badges = [];
-        if (downloadOnly) badges.push(`<span class="badge">${sourceMode ? '源文件可读' : '仅可下载'}</span>`);
-        if (downloadOnly && b.source_is_github) badges.push('<span class="badge">直连</span>');
-        if (isUsingSourceStats) badges.push('<span class="badge">源</span>');
+        if (b.pinned_at) badges.push('<span class="badge badge-pinned">置顶</span>');
+        if (downloadOnly) badges.push(`<span class="badge badge-source-mode">${sourceMode ? '源文件可读' : '仅可下载'}</span>`);
+        if (downloadOnly && b.source_is_github) badges.push('<span class="badge badge-gh">直连</span>');
+        if (isUsingSourceStats) badges.push('<span class="badge badge-source-stats">源</span>');
         if (isUnlisted) badges.push('<span class="badge badge-warn">下架</span>');
         if (isDeleted) badges.push('<span class="badge badge-warn">回收站</span>');
         if (isPurging) badges.push('<span class="badge badge-danger">清理中</span>');
@@ -302,20 +308,27 @@ function renderBookListFromCache() {
         })();
 
         const chips = [];
-        if (b.author) chips.push(`<span class="chip chip-muted">作者：${esc(b.author)}</span>`);
-        chips.push(`<span class="chip">${esc(chapterText)} 章</span>`);
-        chips.push(`<span class="chip">${esc(wordText)} 字</span>`);
-        if (hasSource) chips.push(`<span class="chip chip-muted">源文件 ${esc(formatBytes(b.source_size || 0))}</span>`);
-        if (isDeleted && deleteAtText) chips.push(`<span class="chip chip-muted">${esc(deleteAtText)}</span>`);
+        if (b.author) chips.push(`<span class="chip chip-author">作者：${esc(b.author)}</span>`);
+        chips.push(`<span class="chip chip-chapters">${esc(chapterText)} 章</span>`);
+        chips.push(`<span class="chip chip-words">${esc(wordText)} 字</span>`);
+        if (hasSource) chips.push(`<span class="chip chip-source">源文件 ${esc(formatBytes(b.source_size || 0))}</span>`);
+        if (isDeleted && deleteAtText) chips.push(`<span class="chip chip-muted chip-delete-at">${esc(deleteAtText)}</span>`);
+
+        const categories = Array.isArray(b.categories) ? b.categories : [];
+        for (const c of categories) {
+          const isSpecial = !!c?.is_special;
+          const cls = ['chip', 'chip-category', isSpecial ? 'chip-category-special' : ''].filter(Boolean).join(' ');
+          chips.push(`<span class="${cls}">分类：${esc(c?.name || '')}</span>`);
+        }
+
+        const inlineParts = [`<span class="item-title book-inline-title">${esc(b.title)}</span>`]
+          .concat(badges)
+          .concat(chips);
 
         return `
           <li data-id="${b.id}" class="book-item">
             <div class="item-info">
-              <div class="book-title-row">
-                <div class="item-title">${esc(b.title)}</div>
-                ${badges.length ? `<div class="book-badges">${badges.join('')}</div>` : ''}
-              </div>
-              <div class="book-meta-row">${chips.join('')}</div>
+              <div class="book-inline-row">${inlineParts.join('')}</div>
             </div>
             <div class="item-actions">
               ${sourceMode ? `<a class="btn btn-sm" href="/read?book=${b.id}" target="_blank" rel="noopener">在线读</a>` : ''}
@@ -372,15 +385,17 @@ async function createBook() {
   const author = document.getElementById('book-author')?.value?.trim() || '';
   const description = document.getElementById('book-desc')?.value?.trim() || '';
   if (!title) return showMsg('book-msg', '请输入书名', 'error');
+  const category_ids = bookCreateCategoryPicker?.getSelectedIds?.() || [];
 
   try {
-    const res = await api('POST', '/api/admin/books', { title, author, description });
+    const res = await api('POST', '/api/admin/books', { title, author, description, category_ids });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     showMsg('book-msg', `创建成功：${data.book.title}`, 'success');
     if (document.getElementById('book-title')) document.getElementById('book-title').value = '';
     if (document.getElementById('book-author')) document.getElementById('book-author').value = '';
     if (document.getElementById('book-desc')) document.getElementById('book-desc').value = '';
+    bookCreateCategoryPicker?.setSelectedIds?.([]);
     refreshAllBooks();
   } catch (e) {
     showMsg('book-msg', e.message, 'error');

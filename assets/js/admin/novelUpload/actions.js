@@ -5,7 +5,7 @@ import { createBookAndUploadSource } from './uploadSourceOnly.js';
 
 const MAX_SOURCE_BYTES = 200 * 1024 * 1024;
 
-export async function startImportAction({ state, ensureParsed, onDone } = {}) {
+export async function startImportAction({ state, ensureParsed, onDone, getCategoryIdsForNewBook } = {}) {
   if (!state?.file) return showMsg('novel-msg', '请先选择文件', 'error');
   if (!state?.canImport) return showMsg('novel-msg', '该文件无法导入生成章节', 'error');
 
@@ -13,6 +13,7 @@ export async function startImportAction({ state, ensureParsed, onDone } = {}) {
   if (!parsed?.chapters?.length) return showMsg('novel-msg', '未解析到章节内容', 'error');
 
   const targetType = getRadio('novel-import-target', 'existing');
+  const category_ids = typeof getCategoryIdsForNewBook === 'function' ? getCategoryIdsForNewBook() : [];
   const target =
     targetType === 'new'
       ? {
@@ -20,6 +21,7 @@ export async function startImportAction({ state, ensureParsed, onDone } = {}) {
           title: document.getElementById('novel-book-title')?.value?.trim() || '',
           author: document.getElementById('novel-book-author')?.value?.trim() || '',
           description: document.getElementById('novel-book-desc')?.value?.trim() || '',
+          category_ids,
         }
       : { type: 'existing', bookId: document.getElementById('import-book')?.value || '' };
 
@@ -56,7 +58,7 @@ export async function startImportAction({ state, ensureParsed, onDone } = {}) {
   }
 }
 
-export async function startSourceOnlyAction({ state, onDone } = {}) {
+export async function startSourceOnlyAction({ state, onDone, getCategoryIdsForNewBook } = {}) {
   if (!state?.file) return showMsg('novel-source-msg', '请先选择文件', 'error');
   if (state.file.size > MAX_SOURCE_BYTES) return showMsg('novel-source-msg', '文件超过 200MB 限制', 'error');
 
@@ -71,6 +73,7 @@ export async function startSourceOnlyAction({ state, onDone } = {}) {
       title,
       author,
       description,
+      category_ids: typeof getCategoryIdsForNewBook === 'function' ? getCategoryIdsForNewBook() : [],
       JSZip: globalThis.JSZip,
       onStatus: (t) => showMsg('novel-source-msg', t, ''),
     });
@@ -82,4 +85,3 @@ export async function startSourceOnlyAction({ state, onDone } = {}) {
     showMsg('novel-source-msg', e.message || '失败', 'error');
   }
 }
-

@@ -37,11 +37,19 @@ export async function runImportFlow({ file, kind, parsed, target, onStatus, onPr
       const title = String(target.title || '').trim().slice(0, 200);
       if (!title) throw new Error('请输入书名');
       if (typeof onStatus === 'function') onStatus('创建书籍中...');
-      const res = await api('POST', '/api/admin/books', {
+      const categoryIds = (Array.isArray(target.category_ids) ? target.category_ids : [])
+        .map((x) => Number(x))
+        .filter((n) => Number.isFinite(n) && n > 0)
+        .slice(0, 20);
+
+      const payload = {
         title,
         author: String(target.author || '').trim().slice(0, 100),
         description: String(target.description || '').trim().slice(0, 2000),
-      });
+      };
+      if (categoryIds.length) payload.category_ids = categoryIds;
+
+      const res = await api('POST', '/api/admin/books', payload);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || '创建书籍失败');
       bookId = data.book?.id;
@@ -92,4 +100,3 @@ export async function runImportFlow({ file, kind, parsed, target, onStatus, onPr
     throw e;
   }
 }
-

@@ -6,6 +6,7 @@ import { syncImportGitHubCbz } from './syncComicCbz.js';
 import { syncImportGitHubNovel } from './syncNovel.js';
 import { initGitHubNovelBatchUi, refreshGitHubNovelBatchUi } from './novelBatchUi.js';
 import { tryComputeAndSaveSourceMeta } from './novelMeta.js';
+import { createCategoryPicker } from '../categories/picker.js';
 
 function getNovelTargetFromUi(defaultTitle) {
   const targetType = document.querySelector('input[name="novel-import-target"]:checked')?.value || 'existing';
@@ -32,7 +33,11 @@ function getNovelTargetFromUi(defaultTitle) {
 export function initGitHubRepoContentUi({ onNovelDone, onComicDone } = {}) {
   document.getElementById('gh-repo-scan-novels-btn')?.addEventListener('click', () => scanNovels());
   document.getElementById('gh-repo-scan-comics-btn')?.addEventListener('click', () => scanComics());
-  initGitHubNovelBatchUi({ onNovelDone });
+
+  const ghCategoryPicker = createCategoryPicker({ container: document.getElementById('gh-repo-category-picker') });
+  const getCategoryIds = () => ghCategoryPicker?.getSelectedIds?.() || [];
+
+  initGitHubNovelBatchUi({ onNovelDone, getCategoryIds });
 
   window.addEventListener('admin:role-changed', (e) => {
     const role = String(e?.detail?.role || '');
@@ -55,7 +60,7 @@ export function initGitHubRepoContentUi({ onNovelDone, onComicDone } = {}) {
       try {
         setBusy(true);
         showMsg('gh-repo-novels-msg', '绑定中...', '');
-        const data = await bindGitHubNovel({ path, title, name, size });
+        const data = await bindGitHubNovel({ path, title, name, size, category_ids: getCategoryIds() });
         const bookId = data?.book?.id;
         if (bookId) {
           showMsg('gh-repo-novels-msg', '已绑定，正在统计章数/字数...', '');
@@ -82,6 +87,7 @@ export function initGitHubRepoContentUi({ onNovelDone, onComicDone } = {}) {
         setBusy(true);
         const defaultTitle = filenameToTitle(name);
         const target = getNovelTargetFromUi(defaultTitle);
+        if (target?.type === 'new') target.category_ids = getCategoryIds();
         const result = await syncImportGitHubNovel(
           { path, name, target },
           {

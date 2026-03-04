@@ -17,6 +17,7 @@ import { initFonts, loadFontList } from './fonts.js';
 import { initTags, loadTagList } from './tags.js';
 import { initBookEditModal } from './bookEditModal.js';
 import { loadStats } from './stats.js';
+import { initCategories, loadCategoriesOrShowError } from './categories/index.js';
 
 export function initAdminApp() {
   initThemeToggle(document.querySelector('.theme-toggle'));
@@ -25,6 +26,7 @@ export function initAdminApp() {
 
   initBookEditModal();
   initTags();
+  initCategories();
   initBooks();
   initChapters();
   initBatch();
@@ -53,6 +55,7 @@ export function initAdminApp() {
       loadComicList();
       loadStorageSummary();
       loadTagList();
+      loadCategoriesOrShowError();
 
       if (role === 'super_admin') {
         loadAdminUsers();

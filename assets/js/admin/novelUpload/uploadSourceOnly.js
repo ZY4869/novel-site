@@ -19,7 +19,7 @@ async function tryRollbackCreatedBook(bookId) {
   }
 }
 
-export async function createBookAndUploadSource({ file, title, author, description, JSZip, onStatus } = {}) {
+export async function createBookAndUploadSource({ file, title, author, description, category_ids, JSZip, onStatus } = {}) {
   if (!file) throw new Error('请选择文件');
   const safeTitle = String(title || '').trim().slice(0, 200);
   if (!safeTitle) throw new Error('请输入书名');
@@ -27,11 +27,19 @@ export async function createBookAndUploadSource({ file, title, author, descripti
   let createdBookId = null;
   try {
     if (typeof onStatus === 'function') onStatus('创建中...');
-    const res = await api('POST', '/api/admin/books', {
+    const categoryIds = (Array.isArray(category_ids) ? category_ids : [])
+      .map((x) => Number(x))
+      .filter((n) => Number.isFinite(n) && n > 0)
+      .slice(0, 20);
+
+    const payload = {
       title: safeTitle,
       author: String(author || '').trim().slice(0, 100),
       description: String(description || '').trim().slice(0, 2000),
-    });
+    };
+    if (categoryIds.length) payload.category_ids = categoryIds;
+
+    const res = await api('POST', '/api/admin/books', payload);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || '创建书籍失败');
     createdBookId = data.book?.id;
@@ -66,4 +74,3 @@ export async function createBookAndUploadSource({ file, title, author, descripti
     throw err;
   }
 }
-

@@ -5,7 +5,7 @@ import { isBusy, setBusy } from './state.js';
 import { tryComputeAndSaveSourceMeta } from './novelMeta.js';
 let abortRequested = false;
 
-export function initGitHubNovelBatchUi({ onNovelDone } = {}) {
+export function initGitHubNovelBatchUi({ onNovelDone, getCategoryIds } = {}) {
   document.getElementById('gh-repo-novels-select-all')?.addEventListener('change', (e) => {
     if (isBusy()) return;
     setAllNovelSelected(!!e.target.checked);
@@ -15,8 +15,12 @@ export function initGitHubNovelBatchUi({ onNovelDone } = {}) {
     if (!e.target?.classList?.contains('gh-novel-select')) return;
     refreshGitHubNovelBatchUi();
   });
-  document.getElementById('gh-repo-novels-batch-bind-btn')?.addEventListener('click', () => batchBindSelectedNovels({ onNovelDone }));
-  document.getElementById('gh-repo-novels-batch-sync-btn')?.addEventListener('click', () => batchSyncSelectedNovels({ onNovelDone }));
+  document.getElementById('gh-repo-novels-batch-bind-btn')?.addEventListener('click', () =>
+    batchBindSelectedNovels({ onNovelDone, getCategoryIds })
+  );
+  document.getElementById('gh-repo-novels-batch-sync-btn')?.addEventListener('click', () =>
+    batchSyncSelectedNovels({ onNovelDone, getCategoryIds })
+  );
   document.getElementById('gh-repo-novels-batch-cancel-btn')?.addEventListener('click', () => {
     abortRequested = true;
     showMsg('gh-repo-novels-msg', '正在停止...', '');
@@ -78,7 +82,7 @@ function getLiInfo(li) {
   return { path, name, size };
 }
 
-async function batchBindSelectedNovels({ onNovelDone } = {}) {
+async function batchBindSelectedNovels({ onNovelDone, getCategoryIds } = {}) {
   if (isBusy()) return;
   const selected = getSelectedNovelLis();
   if (selected.length === 0) return showMsg('gh-repo-novels-msg', '请先勾选要处理的文件', 'error');
@@ -102,7 +106,8 @@ async function batchBindSelectedNovels({ onNovelDone } = {}) {
       showMsg('gh-repo-novels-msg', `批量直连绑定 ${i + 1}/${selected.length}：${title}`, '');
 
       try {
-        const data = await bindGitHubNovel({ path, title, name, size });
+        const category_ids = typeof getCategoryIds === 'function' ? getCategoryIds() : [];
+        const data = await bindGitHubNovel({ path, title, name, size, category_ids });
         const bookId = data?.book?.id;
         const already = !!data?.alreadyExists;
         if (already) existed++;
@@ -133,7 +138,7 @@ async function batchBindSelectedNovels({ onNovelDone } = {}) {
   if (created > 0 && typeof onNovelDone === 'function') onNovelDone();
 }
 
-async function batchSyncSelectedNovels({ onNovelDone } = {}) {
+async function batchSyncSelectedNovels({ onNovelDone, getCategoryIds } = {}) {
   if (isBusy()) return;
   const selected = getSelectedNovelLis();
   if (selected.length === 0) return showMsg('gh-repo-novels-msg', '请先勾选要处理的文件', 'error');
@@ -142,6 +147,7 @@ async function batchSyncSelectedNovels({ onNovelDone } = {}) {
   );
   if (!ok) return;
   const tpl = getBatchImportTemplate();
+  const category_ids = typeof getCategoryIds === 'function' ? getCategoryIds() : [];
 
   abortRequested = false;
   showCancelBtn(true);
@@ -167,6 +173,7 @@ async function batchSyncSelectedNovels({ onNovelDone } = {}) {
               title,
               author: tpl.author,
               description: tpl.description,
+              category_ids,
             },
           },
           {

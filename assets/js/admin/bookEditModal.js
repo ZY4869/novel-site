@@ -2,9 +2,11 @@ import { api, authHeaders } from './api.js';
 import { refreshAllBooks } from './books.js';
 import { esc } from './ui.js';
 import { getAllTags, loadTagList } from './tags.js';
+import { createCategoryPicker } from './categories/picker.js';
 
 let editBookId = null;
 let editBookTags = [];
+let bookCategoryPicker = null;
 
 export function initBookEditModal() {
   const overlay = document.getElementById('book-edit-overlay');
@@ -12,6 +14,9 @@ export function initBookEditModal() {
   overlay?.addEventListener('click', (e) => {
     if (e.target === overlay) overlay.classList.remove('active');
   });
+
+  const pickerEl = document.getElementById('edit-book-category-picker');
+  if (pickerEl) bookCategoryPicker = createCategoryPicker({ container: pickerEl });
 
   document.getElementById('remove-cover-btn')?.addEventListener('click', removeCover);
   document.getElementById('edit-cover-file')?.addEventListener('change', onCoverFileChange);
@@ -37,6 +42,10 @@ export async function openBookEditOverlay(book) {
   setValue('edit-book-author', book.author || '');
   setValue('edit-book-desc', book.description || '');
 
+  const pinnedEl = document.getElementById('edit-book-pinned');
+  if (pinnedEl) pinnedEl.checked = !!book?.pinned_at;
+  bookCategoryPicker?.setSelectedIds?.((book?.categories || []).map((c) => c.id));
+
   const preview = document.getElementById('edit-cover-preview');
   const removeBtn = document.getElementById('remove-cover-btn');
   if (book.cover_key) {
@@ -54,8 +63,12 @@ export async function openBookEditOverlay(book) {
     const res = await fetch(`/api/books/${book.id}`);
     const data = await res.json();
     editBookTags = (data.book.tags || []).map((t) => t.id);
+    if (pinnedEl) pinnedEl.checked = !!data?.book?.pinned_at;
+    bookCategoryPicker?.setSelectedIds?.((data?.book?.categories || []).map((c) => c.id));
   } catch {
     editBookTags = [];
+    if (pinnedEl) pinnedEl.checked = false;
+    bookCategoryPicker?.setSelectedIds?.([]);
   }
   renderEditBookTags();
 
@@ -106,10 +119,13 @@ async function saveBookEdits() {
   const description = document.getElementById('edit-book-desc')?.value?.trim() || '';
   if (!title) return alert('书名不能为空');
 
+  const pinned = !!document.getElementById('edit-book-pinned')?.checked;
+  const category_ids = bookCategoryPicker?.getSelectedIds?.() || [];
+
   try {
     const res = await api('PUT', `/api/admin/books/${editBookId}`, { title, author, description });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || '保存失败');
 
     const coverFile = document.getElementById('edit-cover-file')?.files?.[0];
     if (coverFile) {
@@ -124,7 +140,17 @@ async function saveBookEdits() {
       });
     }
 
-    await api('PUT', '/api/admin/book-tags', { book_id: editBookId, tag_ids: editBookTags });
+    const tagRes = await api('PUT', '/api/admin/book-tags', { book_id: editBookId, tag_ids: editBookTags });
+    const tagData = await tagRes.json().catch(() => ({}));
+    if (!tagRes.ok) throw new Error(tagData.error || '保存标签失败');
+
+    const catRes = await api('PUT', '/api/admin/book-categories', { book_id: editBookId, category_ids });
+    const catData = await catRes.json().catch(() => ({}));
+    if (!catRes.ok) throw new Error(catData.error || '保存分类失败');
+
+    const pinRes = await api('PUT', '/api/admin/book-pin', { book_id: editBookId, pinned });
+    const pinData = await pinRes.json().catch(() => ({}));
+    if (!pinRes.ok) throw new Error(pinData.error || '保存置顶失败');
 
     document.getElementById('book-edit-overlay')?.classList.remove('active');
     refreshAllBooks();

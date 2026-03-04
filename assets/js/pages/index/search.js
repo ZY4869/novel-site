@@ -3,6 +3,24 @@ import { highlightMatch } from '../../shared/highlight.js';
 import { formatBytes, formatWords } from '../../shared/format.js';
 import { state } from './state.js';
 
+function restoreShelfVisibility() {
+  const resultsEl = qs('#search-results');
+  if (resultsEl) resultsEl.style.display = 'none';
+
+  const pinnedEl = qs('#pinned-books');
+  if (pinnedEl) pinnedEl.style.display = pinnedEl.innerHTML.trim() ? '' : 'none';
+
+  const contentEl = qs('#content');
+  const groupedEl = qs('#grouped-content');
+  if (state.categoryViewMode === 'group') {
+    if (contentEl) contentEl.style.display = 'none';
+    if (groupedEl) groupedEl.style.display = '';
+  } else {
+    if (groupedEl) groupedEl.style.display = 'none';
+    if (contentEl) contentEl.style.display = '';
+  }
+}
+
 export function bindSearch() {
   const input = qs('#search-input');
   const button = qs('.search-bar button');
@@ -14,8 +32,7 @@ export function bindSearch() {
   });
   input.addEventListener('input', (e) => {
     if (!e.target.value.trim()) {
-      qs('#search-results').style.display = 'none';
-      qs('#content').style.display = '';
+      restoreShelfVisibility();
     }
   });
 }
@@ -23,10 +40,8 @@ export function bindSearch() {
 export function doSearch() {
   const q = qs('#search-input').value.trim().toLowerCase();
   const resultsEl = qs('#search-results');
-  const contentEl = qs('#content');
   if (!q) {
-    resultsEl.style.display = 'none';
-    contentEl.style.display = '';
+    restoreShelfVisibility();
     return;
   }
 
@@ -56,7 +71,12 @@ export function doSearch() {
       .join('');
   }
   resultsEl.style.display = '';
-  contentEl.style.display = 'none';
+  const contentEl = qs('#content');
+  const groupedEl = qs('#grouped-content');
+  const pinnedEl = qs('#pinned-books');
+  if (contentEl) contentEl.style.display = 'none';
+  if (groupedEl) groupedEl.style.display = 'none';
+  if (pinnedEl) pinnedEl.style.display = 'none';
 }
 
 function buildSourceMeta(book, mode) {

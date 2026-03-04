@@ -19,3 +19,25 @@
 .book-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .book-tags .tag-pill { cursor: default; }
 
+/* 分类筛选 / 分组 */
+.category-toggle-bar { margin-bottom: 0; }
+.view-pill { cursor: pointer; }
+.category-pill { cursor: pointer; }
+
+.category-mark {
+  cursor: default;
+  font-size: 11px;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-light);
+}
+.category-mark:hover { opacity: 1; }
+
+.category-special {
+  cursor: default;
+  border-color: rgba(226, 176, 122, 0.45);
+  background: rgba(226, 176, 122, 0.16);
+  color: var(--text);
+}
+.category-special:hover { opacity: 1; }
